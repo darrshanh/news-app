@@ -1,0 +1,30 @@
+# Core Web Scraping & Ingestion (Phase 1)
+feedparser>=6.0.11
+trafilatura>=1.12.0
+lxml-html-clean>=0.4.0
+requests>=2.32.0
+httpx>=0.27.0
+
+# Neural TTS Engine (Phase 1)
+kokoro-onnx>=0.3.0
+soundfile>=0.12.1
+numpy>=1.26.0
+
+# Local LLM Synthesis (Phase 1 & 2)
+transformers>=4.45.0
+accelerate>=0.34.0
+torch>=2.4.0
+
+# API Backend & Schemas (Phase 2)
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.8.0
+pydantic-settings>=2.4.0
+python-dotenv>=1.0.1
+
+# Background Scheduler & Alerts (Phase 5)
+apscheduler>=3.10.4
+tqdm>=4.66.0
+
+# Vector Embeddings & Recommendation (Phase 3 & 4)
+sentence-transformers>=3.0.0

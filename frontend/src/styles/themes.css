@@ -1,0 +1,372 @@
+/* ==========================================================================
+   THE DAILY DISPATCH — EDITORIAL THEME COLLECTION (themes.css)
+   --------------------------------------------------------------------------
+   Contains 8 curated print & literary color palettes (each with a Warm Light
+   and a True Pitch-Black #000000 Dark variant = 16 total combinations).
+
+   MVP Default (Circadian Pairing):
+   - Light Mode Default: Palette 3 (Kyoto Hinoki & Botanical Moss)
+   - Dark Mode Default:  Palette 2 (Pitch-Black Bordeaux & Fjord Petrol)
+   ========================================================================== */
+
+/* Typography Helpers */
+.font-editorial {
+  font-family: Charter, 'Bitstream Charter', 'Sitka Text', Cambria, Georgia, serif;
+}
+
+.font-sans-ui {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* ==========================================================================
+   0. MVP CIRCADIAN DEFAULT (:root = Kyoto Light / .dark = Bordeaux Dark)
+   ========================================================================== */
+:root,
+.theme-circadian-light {
+  --bg-page: #F4F4EC;
+  --bg-surface: #FCFDF9;
+  --bg-subtle: #E9EADE;
+  --bg-hero: #E2E4D5;
+  --bg-dock: rgba(252, 253, 249, 0.94);
+  --text-main: #151C18;
+  --text-body: #2E3832;
+  --text-muted: #68736B;
+  --border-hairline: #D9DDD0;
+  --border-strong: #C3C9B7;
+  --accent-primary: #1F573E;     /* Deep Botanical Moss */
+  --accent-primary-fg: #FFFFFF;
+  --accent-secondary: #2C4A78;   /* Japanese Indigo Dye */
+  --accent-ochre: #B55428;       /* Kyoto Persimmon */
+  --tag-bg: #E6E9DC;
+}
+
+.dark,
+.theme-circadian-dark {
+  --bg-page: #000000;
+  --bg-surface: #0A0809;
+  --bg-subtle: #141012;
+  --bg-hero: #110B0E;
+  --bg-dock: rgba(10, 8, 9, 0.95);
+  --text-main: #F5EEF0;
+  --text-body: #C9BFC2;
+  --text-muted: #7F7276;
+  --border-hairline: #221B1E;
+  --border-strong: #33282C;
+  --accent-primary: #E86B84;     /* Rose Claret */
+  --accent-primary-fg: #000000;
+  --accent-secondary: #5EC2D4;   /* Glacier Petrol */
+  --accent-ochre: #E0A958;       /* Warm Brass */
+  --tag-bg: #1A1316;
+}
+
+/* ==========================================================================
+   1. MARRAKESH SAND & COBALT (Sunlit Parchment + Ultramarine & Saffron)
+   ========================================================================== */
+.palette-cobalt.mode-light {
+  --bg-page: #F6F1E7;
+  --bg-surface: #FFFEFA;
+  --bg-subtle: #EDE5D5;
+  --bg-hero: #EAE0CC;
+  --bg-dock: rgba(255, 254, 250, 0.94);
+  --text-main: #1A1713;
+  --text-body: #363028;
+  --text-muted: #756C5E;
+  --border-hairline: #E0D6C3;
+  --border-strong: #CEC1A8;
+  --accent-primary: #2146A6;     /* Majorelle Ultramarine Cobalt */
+  --accent-primary-fg: #FFFFFF;
+  --accent-secondary: #B86B11;   /* Spiced Saffron Ochre */
+  --accent-ochre: #9E332E;       /* Venetian Crimson */
+  --tag-bg: #EAE1D0;
+}
+
+.palette-cobalt.mode-dark {
+  --bg-page: #000000;
+  --bg-surface: #09090B;
+  --bg-subtle: #121216;
+  --bg-hero: #0B0D14;
+  --bg-dock: rgba(9, 9, 11, 0.95);
+  --text-main: #F3EFE6;
+  --text-body: #C4BEB2;
+  --text-muted: #7A7468;
+  --border-hairline: #1E1E24;
+  --border-strong: #2C2C35;
+  --accent-primary: #7097F8;     /* Luminous Cobalt */
+  --accent-primary-fg: #000000;
+  --accent-secondary: #F0B24C;   /* Saffron Gold */
+  --accent-ochre: #E66C62;       /* Coral Crimson */
+  --tag-bg: #15161E;
+}
+
+/* ==========================================================================
+   2. BORDEAUX & FJORD PETROL (Warm Oat + Vintage Oxblood Wine & Deep Teal)
+   ========================================================================== */
+.palette-bordeaux.mode-light {
+  --bg-page: #F7F3F0;
+  --bg-surface: #FFFFFF;
+  --bg-subtle: #EFE9E4;
+  --bg-hero: #EAE0D9;
+  --bg-dock: rgba(255, 255, 255, 0.94);
+  --text-main: #1D1619;
+  --text-body: #3B3034;
+  --text-muted: #78696F;
+  --border-hairline: #E3D9D2;
+  --border-strong: #CFC1B8;
+  --accent-primary: #822036;     /* Vintage Bordeaux Oxblood */
+  --accent-primary-fg: #FFFFFF;
+  --accent-secondary: #1F5B66;   /* Nordic Fjord Petrol */
+  --accent-ochre: #9C6228;       /* Burnished Amber */
+  --tag-bg: #EFE6E2;
+}
+
+.palette-bordeaux.mode-dark {
+  --bg-page: #000000;
+  --bg-surface: #0A0809;
+  --bg-subtle: #141012;
+  --bg-hero: #110B0E;
+  --bg-dock: rgba(10, 8, 9, 0.95);
+  --text-main: #F5EEF0;
+  --text-body: #C9BFC2;
+  --text-muted: #7F7276;
+  --border-hairline: #221B1E;
+  --border-strong: #33282C;
+  --accent-primary: #E86B84;     /* Rose Claret */
+  --accent-primary-fg: #000000;
+  --accent-secondary: #5EC2D4;   /* Glacier Petrol */
+  --accent-ochre: #E0A958;       /* Warm Brass */
+  --tag-bg: #1A1316;
+}
+
+/* ==========================================================================
+   3. KYOTO HINOKI & MOSS (Warm Cypress Wood + Botanical Jade & Indigo)
+   ========================================================================== */
+.palette-kyoto.mode-light {
+  --bg-page: #F4F4EC;
+  --bg-surface: #FCFDF9;
+  --bg-subtle: #E9EADE;
+  --bg-hero: #E2E4D5;
+  --bg-dock: rgba(252, 253, 249, 0.94);
+  --text-main: #151C18;
+  --text-body: #2E3832;
+  --text-muted: #68736B;
+  --border-hairline: #D9DDD0;
+  --border-strong: #C3C9B7;
+  --accent-primary: #1F573E;     /* Deep Botanical Moss */
+  --accent-primary-fg: #FFFFFF;
+  --accent-secondary: #2C4A78;   /* Japanese Indigo Dye */
+  --accent-ochre: #B55428;       /* Kyoto Persimmon */
+  --tag-bg: #E6E9DC;
+}
+
+.palette-kyoto.mode-dark {
+  --bg-page: #000000;
+  --bg-surface: #080A09;
+  --bg-subtle: #101412;
+  --bg-hero: #0B110E;
+  --bg-dock: rgba(8, 10, 9, 0.95);
+  --text-main: #ECF2EE;
+  --text-body: #B8C4BC;
+  --text-muted: #6E7A72;
+  --border-hairline: #1A211D;
+  --border-strong: #27322C;
+  --accent-primary: #57C492;     /* Botanical Jade */
+  --accent-primary-fg: #000000;
+  --accent-secondary: #7BA8E8;   /* Soft Ai-iro Blue */
+  --accent-ochre: #E8895C;       /* Warm Persimmon */
+  --tag-bg: #121A15;
+}
+
+/* ==========================================================================
+   4. PERSIMMON & MULBERRY PLUM (Warm Linen + Spiced Vermilion & Deep Plum)
+   ========================================================================== */
+.palette-plum.mode-light {
+  --bg-page: #F8F4EE;
+  --bg-surface: #FFFDFB;
+  --bg-subtle: #F0E9DF;
+  --bg-hero: #EBE0D2;
+  --bg-dock: rgba(255, 253, 251, 0.94);
+  --text-main: #1C171A;
+  --text-body: #3A3136;
+  --text-muted: #786B72;
+  --border-hairline: #E4D9CC;
+  --border-strong: #D1C2B0;
+  --accent-primary: #C43B28;     /* Spiced Vermilion */
+  --accent-primary-fg: #FFFFFF;
+  --accent-secondary: #6B3263;   /* Deep Mulberry Plum */
+  --accent-ochre: #2B6653;       /* Deep Viridian */
+  --tag-bg: #EFE6DC;
+}
+
+.palette-plum.mode-dark {
+  --bg-page: #000000;
+  --bg-surface: #0A090A;
+  --bg-subtle: #141114;
+  --bg-hero: #120D11;
+  --bg-dock: rgba(10, 9, 10, 0.95);
+  --text-main: #F5EFEA;
+  --text-body: #C9BFC4;
+  --text-muted: #7D7077;
+  --border-hairline: #211B20;
+  --border-strong: #322930;
+  --accent-primary: #F26A52;     /* Coral Vermilion */
+  --accent-primary-fg: #000000;
+  --accent-secondary: #CC85C2;   /* Orchid Mulberry */
+  --accent-ochre: #5CC2A1;       /* Viridian Mint */
+  --tag-bg: #181317;
+}
+
+/* ==========================================================================
+   5. [NEW] FINANCIAL TIMES BISQUE & OXFORD (Salmon Newsprint + Navy & Claret)
+   ========================================================================== */
+.palette-ft-salmon.mode-light {
+  --bg-page: #FFF1E5;
+  --bg-surface: #FFF9F5;
+  --bg-subtle: #F2DFCE;
+  --bg-hero: #F7E5D4;
+  --bg-dock: rgba(255, 249, 245, 0.94);
+  --text-main: #1D1A18;
+  --text-body: #33302E;
+  --text-muted: #66605C;
+  --border-hairline: #E6D2C0;
+  --border-strong: #CCAFA0;
+  --accent-primary: #990F3D;     /* FT Claret Crimson */
+  --accent-primary-fg: #FFFFFF;
+  --accent-secondary: #0F5499;   /* Oxford Financial Blue */
+  --accent-ochre: #0D7680;       /* Sovereign Teal */
+  --tag-bg: #F2DFCE;
+}
+
+.palette-ft-salmon.mode-dark {
+  --bg-page: #000000;
+  --bg-surface: #0B0908;
+  --bg-subtle: #161210;
+  --bg-hero: #140E0B;
+  --bg-dock: rgba(11, 9, 8, 0.95);
+  --text-main: #FAF0E6;
+  --text-body: #CFC2B8;
+  --text-muted: #85786E;
+  --border-hairline: #241D19;
+  --border-strong: #382C26;
+  --accent-primary: #FF7597;     /* Luminous Claret Rose */
+  --accent-primary-fg: #000000;
+  --accent-secondary: #66A8FF;   /* Oxford Sky */
+  --accent-ochre: #4DD0E1;       /* Sovereign Cyan */
+  --tag-bg: #1C1512;
+}
+
+/* ==========================================================================
+   6. [NEW] WEIMAR BAUHAUS (Archival Vellum + Brick Red, Mustard & Steel)
+   ========================================================================== */
+.palette-bauhaus.mode-light {
+  --bg-page: #F3EFE6;
+  --bg-surface: #FAF8F2;
+  --bg-subtle: #E6E0D2;
+  --bg-hero: #DFD8C6;
+  --bg-dock: rgba(250, 248, 242, 0.94);
+  --text-main: #141413;
+  --text-body: #2C2B29;
+  --text-muted: #6B6860;
+  --border-hairline: #D6CFC0;
+  --border-strong: #B8B09E;
+  --accent-primary: #BE3124;     /* Bauhaus Brick Red */
+  --accent-primary-fg: #FFFFFF;
+  --accent-secondary: #1D4E89;   /* Weimar Steel Blue */
+  --accent-ochre: #B87D0E;       /* Ochre Yellow */
+  --tag-bg: #E5DEC9;
+}
+
+.palette-bauhaus.mode-dark {
+  --bg-page: #000000;
+  --bg-surface: #090909;
+  --bg-subtle: #141413;
+  --bg-hero: #11100E;
+  --bg-dock: rgba(9, 9, 9, 0.95);
+  --text-main: #F2EFE9;
+  --text-body: #C4C0B7;
+  --text-muted: #78756D;
+  --border-hairline: #22211E;
+  --border-strong: #36342F;
+  --accent-primary: #F25C4E;     /* Signal Red */
+  --accent-primary-fg: #000000;
+  --accent-secondary: #68A2E8;   /* Bauhaus Cobalt */
+  --accent-ochre: #F5C242;       /* Bauhaus Yellow */
+  --tag-bg: #191816;
+}
+
+/* ==========================================================================
+   7. [NEW] MILANESE ESPRESSO & OLIVE (Warm Cream + Roasted Coffee & Olive)
+   ========================================================================== */
+.palette-espresso.mode-light {
+  --bg-page: #F6F2EC;
+  --bg-surface: #FFFDF9;
+  --bg-subtle: #EBE4D8;
+  --bg-hero: #E4DACB;
+  --bg-dock: rgba(255, 253, 249, 0.94);
+  --text-main: #1E1610;
+  --text-body: #3B2F26;
+  --text-muted: #7A6A5E;
+  --border-hairline: #E0D5C5;
+  --border-strong: #C9B9A3;
+  --accent-primary: #6F381C;     /* Roasted Espresso */
+  --accent-primary-fg: #FFFFFF;
+  --accent-secondary: #4A6128;   /* Tuscan Olive Leaf */
+  --accent-ochre: #B54B28;       /* Burnt Terracotta */
+  --tag-bg: #EAE0D2;
+}
+
+.palette-espresso.mode-dark {
+  --bg-page: #000000;
+  --bg-surface: #0A0806;
+  --bg-subtle: #14110D;
+  --bg-hero: #120E09;
+  --bg-dock: rgba(10, 8, 6, 0.95);
+  --text-main: #F5EFE6;
+  --text-body: #C7BCAE;
+  --text-muted: #7D7163;
+  --border-hairline: #211C16;
+  --border-strong: #362D24;
+  --accent-primary: #DDA15E;     /* Espresso Crema Gold */
+  --accent-primary-fg: #000000;
+  --accent-secondary: #99B865;   /* Light Olive Sage */
+  --accent-ochre: #E87A54;       /* Siena Orange */
+  --tag-bg: #1A1510;
+}
+
+/* ==========================================================================
+   8. [NEW] SWISS ARCHIVAL & INTERNATIONAL ORANGE (Gallery Paper + Signal Red)
+   ========================================================================== */
+.palette-swiss.mode-light {
+  --bg-page: #F7F6F2;
+  --bg-surface: #FFFFFF;
+  --bg-subtle: #ECEAE3;
+  --bg-hero: #E5E2D9;
+  --bg-dock: rgba(255, 255, 255, 0.94);
+  --text-main: #111110;
+  --text-body: #2B2B29;
+  --text-muted: #6E6D68;
+  --border-hairline: #DFDDD4;
+  --border-strong: #C4C1B5;
+  --accent-primary: #D9381E;     /* International Signal Orange */
+  --accent-primary-fg: #FFFFFF;
+  --accent-secondary: #1F4E5B;   /* Deep Alpine Slate */
+  --accent-ochre: #8C5E2A;       /* Raw Umber */
+  --tag-bg: #EAE8E0;
+}
+
+.palette-swiss.mode-dark {
+  --bg-page: #000000;
+  --bg-surface: #080808;
+  --bg-subtle: #121212;
+  --bg-hero: #0E0E0E;
+  --bg-dock: rgba(8, 8, 8, 0.95);
+  --text-main: #F5F5F3;
+  --text-body: #C7C7C2;
+  --text-muted: #787873;
+  --border-hairline: #1E1E1D;
+  --border-strong: #2E2E2C;
+  --accent-primary: #FF5538;     /* Braun Signal Vermilion */
+  --accent-primary-fg: #000000;
+  --accent-secondary: #75B8C8;   /* Glacier Steel */
+  --accent-ochre: #E2A857;       /* Anodized Gold */
+  --tag-bg: #161615;
+}

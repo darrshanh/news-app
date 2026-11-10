@@ -1,0 +1,39 @@
+services:
+  # -------------------------------------------------------------
+  # GPU-Accelerated Container (e.g. RunPod, Lambda, AWS EC2 G4dn)
+  # -------------------------------------------------------------
+  backend-gpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: news-agent-backend-gpu
+    environment:
+      - DEVICE=auto
+      - PORT=8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # -------------------------------------------------------------
+  # CPU-Only Container (e.g. DigitalOcean Droplet, Railway, Render)
+  # -------------------------------------------------------------
+  backend-cpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: news-agent-backend-cpu
+    environment:
+      - DEVICE=cpu
+      - PORT=8000
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./data:/app/data
