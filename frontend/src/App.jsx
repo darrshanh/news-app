@@ -66,8 +66,17 @@ export default function App() {
 
   const audioRef = useRef(null)
 
-  // Dynamic API Base URL: supports Cloudflare Pages deployment via VITE_API_URL or relative proxy
-  const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '')
+  // Dynamic API Base URL: checks URL query (?api=https://...), localStorage, VITE_API_URL, or relative proxy
+  const queryApi = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('api') : null
+  if (queryApi && typeof window !== 'undefined') {
+    localStorage.setItem('news_agent_api_base', queryApi.replace(/\/+$/, ''))
+  }
+  const API_BASE = (
+    queryApi ||
+    (typeof window !== 'undefined' ? localStorage.getItem('news_agent_api_base') : '') ||
+    import.meta.env.VITE_API_URL ||
+    ''
+  ).replace(/\/+$/, '')
 
   // 1. Fetch articles from FastAPI backend
   const fetchArticles = async () => {
