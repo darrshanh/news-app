@@ -332,7 +332,7 @@ export default function App() {
       {/* ============================================================== */}
       {/* 2. MAIN EDITORIAL CONTENT */}
       {/* ============================================================== */}
-      <main className="max-w-5xl mx-auto px-6 md:px-12 py-10 space-y-14">
+      <main className={`max-w-5xl mx-auto px-6 md:px-12 py-10 space-y-14 ${currentTrack ? 'pb-28' : ''}`}>
         {/* Loading Skeleton */}
         {isLoading && (
           <div className="py-24 text-center space-y-3">
@@ -796,16 +796,19 @@ export default function App() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                   {furtherDispatches.map((article) => {
                     const isCurrent = currentTrack?.id === article.id && isPlaying
                     const isExpanded = !!expandedTimelines[article.id]
+                    const isCardExpanded = !!expandedSummaries[article.id] || isExpanded
                     const bullets = parseTakeaways(article.takeaways, article.title)
 
                     return (
                       <article
                         key={article.id}
-                        className="h-full md:min-h-[440px] rounded-2xl p-7 md:p-8 border flex flex-col justify-between space-y-6 shadow-sm transition hover:shadow-md"
+                        className={`${
+                          isCardExpanded ? 'md:min-h-[520px] h-auto' : 'md:h-[520px]'
+                        } rounded-2xl p-7 md:p-8 border flex flex-col justify-between space-y-6 shadow-sm transition hover:shadow-md`}
                         style={{
                           backgroundColor: 'var(--bg-surface)',
                           borderColor: isCurrent
@@ -885,7 +888,7 @@ export default function App() {
                             {bullets.map((b, i) => (
                               <li key={i} className="flex gap-2 items-baseline">
                                 <span style={{ color: 'var(--accent-primary)' }}>•</span>
-                                <span>{b}</span>
+                                <span className={expandedSummaries[article.id] ? '' : 'line-clamp-2'}>{b}</span>
                               </li>
                             ))}
                           </ul>
@@ -912,13 +915,14 @@ export default function App() {
                             </button>
                             <button
                               onClick={() => toggleTimeline(article.id)}
+                              aria-expanded={isExpanded}
                               className="px-3.5 py-2 rounded-full border cursor-pointer hover:opacity-85"
                               style={{
                                 borderColor: 'var(--border-strong)',
                                 color: 'var(--text-body)',
                               }}
                             >
-                              Context
+                              Context {isExpanded ? '▲' : '▼'}
                             </button>
                           </div>
 
