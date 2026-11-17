@@ -972,6 +972,34 @@ export default function App() {
                     )
                   }
 
+                  const leftCol = []
+                  const rightCol = []
+                  let leftHeight = 0
+                  let rightHeight = 0
+
+                  for (const article of furtherDispatches) {
+                    const bullets = parseTakeaways(article.takeaways, article.title)
+                    const titleLines = Math.ceil((article.title?.length || 40) / 36)
+                    const bulletsHeight = bullets.reduce(
+                      (sum, b) => sum + Math.ceil((b?.length || 40) / 48) * 24 + 12,
+                      0
+                    )
+                    const estHeight =
+                      240 +
+                      titleLines * 28 +
+                      (article.summary ? 75 : 0) +
+                      bulletsHeight +
+                      32
+
+                    if (leftHeight <= rightHeight) {
+                      leftCol.push(article)
+                      leftHeight += estHeight
+                    } else {
+                      rightCol.push(article)
+                      rightHeight += estHeight
+                    }
+                  }
+
                   return (
                     <>
                       {/* Mobile: single-column chronological stack */}
@@ -979,17 +1007,13 @@ export default function App() {
                         {furtherDispatches.map(renderDispatchCard)}
                       </div>
 
-                      {/* Desktop: 2-column masonry without horizontal row boundaries */}
+                      {/* Desktop: 2-column balanced masonry */}
                       <div className="hidden md:grid md:grid-cols-2 gap-8 items-start">
                         <div className="flex flex-col gap-8">
-                          {furtherDispatches
-                            .filter((_, idx) => idx % 2 === 0)
-                            .map(renderDispatchCard)}
+                          {leftCol.map(renderDispatchCard)}
                         </div>
                         <div className="flex flex-col gap-8">
-                          {furtherDispatches
-                            .filter((_, idx) => idx % 2 === 1)
-                            .map(renderDispatchCard)}
+                          {rightCol.map(renderDispatchCard)}
                         </div>
                       </div>
                     </>
