@@ -796,19 +796,16 @@ export default function App() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                  {furtherDispatches.map((article) => {
+                {(() => {
+                  const renderDispatchCard = (article) => {
                     const isCurrent = currentTrack?.id === article.id && isPlaying
                     const isExpanded = !!expandedTimelines[article.id]
-                    const isCardExpanded = !!expandedSummaries[article.id] || isExpanded
                     const bullets = parseTakeaways(article.takeaways, article.title)
 
                     return (
                       <article
                         key={article.id}
-                        className={`${
-                          isCardExpanded ? 'md:min-h-[520px] h-auto' : 'md:h-[520px]'
-                        } rounded-2xl p-7 md:p-8 border flex flex-col justify-between space-y-6 shadow-sm transition hover:shadow-md`}
+                        className="rounded-2xl p-7 md:p-8 border flex flex-col justify-between space-y-6 shadow-sm transition hover:shadow-md"
                         style={{
                           backgroundColor: 'var(--bg-surface)',
                           borderColor: isCurrent
@@ -834,9 +831,7 @@ export default function App() {
                           </div>
 
                           <h4
-                            className={`font-editorial text-xl md:text-2xl font-bold leading-snug ${
-                              expandedSummaries[article.id] ? '' : 'line-clamp-2'
-                            }`}
+                            className="font-editorial text-xl md:text-2xl font-bold leading-snug"
                             style={{ color: 'var(--text-main)' }}
                           >
                             {article.title}
@@ -888,7 +883,7 @@ export default function App() {
                             {bullets.map((b, i) => (
                               <li key={i} className="flex gap-2 items-baseline">
                                 <span style={{ color: 'var(--accent-primary)' }}>•</span>
-                                <span className={expandedSummaries[article.id] ? '' : 'line-clamp-2'}>{b}</span>
+                                <span>{b}</span>
                               </li>
                             ))}
                           </ul>
@@ -975,8 +970,31 @@ export default function App() {
                         )}
                       </article>
                     )
-                  })}
-                </div>
+                  }
+
+                  return (
+                    <>
+                      {/* Mobile: single-column chronological stack */}
+                      <div className="flex flex-col gap-8 md:hidden">
+                        {furtherDispatches.map(renderDispatchCard)}
+                      </div>
+
+                      {/* Desktop: 2-column masonry without horizontal row boundaries */}
+                      <div className="hidden md:grid md:grid-cols-2 gap-8 items-start">
+                        <div className="flex flex-col gap-8">
+                          {furtherDispatches
+                            .filter((_, idx) => idx % 2 === 0)
+                            .map(renderDispatchCard)}
+                        </div>
+                        <div className="flex flex-col gap-8">
+                          {furtherDispatches
+                            .filter((_, idx) => idx % 2 === 1)
+                            .map(renderDispatchCard)}
+                        </div>
+                      </div>
+                    </>
+                  )
+                })()}
               </section>
             )}
           </>
