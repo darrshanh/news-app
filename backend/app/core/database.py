@@ -43,13 +43,20 @@ def save_article(article: ArticleCreate) -> Optional[int]:
 
     return inserted_id if inserted_id else None
 
-def get_articles(limit: int = 20) -> list[dict]:
+def get_articles(limit: int = 20, since_id: Optional[int] = None) -> list[dict]:
     conn = get_db_connection()
-    table_query_stmt = "SELECT * FROM articles ORDER BY id DESC LIMIT ?"
-    cursor = conn.execute(
-        table_query_stmt,
-        (limit,)
-    )
+    if since_id is not None:
+        table_query_stmt = "SELECT * FROM articles WHERE id > ? ORDER BY id DESC LIMIT ?"
+        cursor = conn.execute(
+            table_query_stmt,
+            (since_id, limit)
+        )
+    else:
+        table_query_stmt = "SELECT * FROM articles ORDER BY id DESC LIMIT ?"
+        cursor = conn.execute(
+            table_query_stmt, 
+            (limit,)
+        )
     rows = cursor.fetchall()
     conn.close()
 

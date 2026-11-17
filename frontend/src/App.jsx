@@ -54,6 +54,7 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false)
   const [isDark, setIsDark] = useState(false)
   const [expandedTimelines, setExpandedTimelines] = useState({})
+  const [expandedSummaries, setExpandedSummaries] = useState({})
   const [feedback, setFeedback] = useState({})
 
   // Audio Playback State
@@ -97,15 +98,57 @@ export default function App() {
     fetchArticles()
   }, [])
 
-  // 2. Refresh / Sync live RSS feeds and re-fetch
+  // 2. Refresh / Sync: instant DB cache check + real-time SSE stream
   const handleSync = async () => {
+    if (isSyncing) return
     setIsSyncing(true)
+
+    // Action 1: Instantly fetch any articles already cached by the 30-min cron
     try {
-      await fetch(`${API_BASE}/api/articles/sync`, { method: 'POST' })
-      await fetchArticles()
+      const maxId = articles.length > 0 ? Math.max(...articles.map((a) => a.id)) : 0
+      if (maxId > 0) {
+        const res = await fetch(`${API_BASE}/api/articles?since_id=${maxId}`)
+        if (res.ok) {
+          const cachedNew = await res.json()
+          if (cachedNew.length > 0) {
+            setArticles((prev) => {
+              const existingIds = new Set(prev.map((a) => a.id))
+              const uniqueNew = cachedNew.filter((a) => !existingIds.has(a.id))
+              return [...uniqueNew, ...prev]
+            })
+          }
+        }
+      } else {
+        await fetchArticles()
+      }
     } catch (err) {
-      console.error('Failed to sync feeds:', err)
-    } finally {
+      console.error('Failed to check cached articles:', err)
+    }
+
+    // Action 2: Open live SSE stream for freshly scraped & synthesized articles
+    const eventSource = new EventSource(`${API_BASE}/api/articles/sync/stream`)
+
+    eventSource.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data)
+        if (payload.type === 'article_ready' && payload.article) {
+          setArticles((prev) =>
+            prev.some((a) => a.id === payload.article.id)
+              ? prev
+              : [payload.article, ...prev]
+          )
+        } else if (payload.type === 'sync_complete' || payload.type === 'sync_error') {
+          eventSource.close()
+          setIsSyncing(false)
+        }
+      } catch (err) {
+        console.error('Failed to parse SSE payload:', err)
+      }
+    }
+
+    eventSource.onerror = (err) => {
+      console.error('SSE stream error:', err)
+      eventSource.close()
       setIsSyncing(false)
     }
   }
@@ -176,6 +219,14 @@ export default function App() {
   // 8. Toggle collapsible timeline
   const toggleTimeline = (articleId) => {
     setExpandedTimelines((prev) => ({
+      ...prev,
+      [articleId]: !prev[articleId],
+    }))
+  }
+
+  // 8b. Toggle analytical summary expansion
+  const toggleSummary = (articleId) => {
+    setExpandedSummaries((prev) => ({
       ...prev,
       [articleId]: !prev[articleId],
     }))
@@ -425,6 +476,42 @@ export default function App() {
                   >
                     {leadStory.title}
                   </h2>
+
+                  {/* Analytical Deep Dive Preview with Fade & Read More */}
+                  {leadStory.summary && (
+                    <div className="pt-1">
+                      <div
+                        className={`relative font-editorial text-base md:text-lg leading-relaxed transition-all duration-300 ${
+                          expandedSummaries[leadStory.id] ? '' : 'max-h-14 overflow-hidden'
+                        }`}
+                        style={{
+                          color: expandedSummaries[leadStory.id]
+                            ? 'var(--text-body)'
+                            : 'var(--text-muted)',
+                        }}
+                      >
+                        <p className="whitespace-pre-line leading-relaxed">
+                          {leadStory.summary}
+                        </p>
+                        {!expandedSummaries[leadStory.id] && (
+                          <div
+                            className="pointer-events-none absolute inset-x-0 bottom-0 h-10"
+                            style={{
+                              background:
+                                'linear-gradient(to bottom, transparent, var(--bg-surface))',
+                            }}
+                          />
+                        )}
+                      </div>
+                      <button
+                        onClick={() => toggleSummary(leadStory.id)}
+                        className="mt-1 text-xs font-semibold cursor-pointer transition hover:underline flex items-center gap-1"
+                        style={{ color: 'var(--accent-primary)' }}
+                      >
+                        {expandedSummaries[leadStory.id] ? 'Show less ↑' : 'Read more ↓'}
+                      </button>
+                    </div>
+                  )}
 
                   {/* 3 Upright Numbered Takeaways */}
                   <div
@@ -749,6 +836,42 @@ export default function App() {
                           >
                             {article.title}
                           </h4>
+
+                          {/* Analytical Deep Dive Preview with Fade & Read More */}
+                          {article.summary && (
+                            <div className="pt-1">
+                              <div
+                                className={`relative font-editorial text-sm md:text-base leading-relaxed transition-all duration-300 ${
+                                  expandedSummaries[article.id] ? '' : 'max-h-12 overflow-hidden'
+                                }`}
+                                style={{
+                                  color: expandedSummaries[article.id]
+                                    ? 'var(--text-body)'
+                                    : 'var(--text-muted)',
+                                }}
+                              >
+                                <p className="whitespace-pre-line leading-relaxed">
+                                  {article.summary}
+                                </p>
+                                {!expandedSummaries[article.id] && (
+                                  <div
+                                    className="pointer-events-none absolute inset-x-0 bottom-0 h-8"
+                                    style={{
+                                      background:
+                                        'linear-gradient(to bottom, transparent, var(--bg-surface))',
+                                    }}
+                                  />
+                                )}
+                              </div>
+                              <button
+                                onClick={() => toggleSummary(article.id)}
+                                className="mt-1 text-xs font-semibold cursor-pointer transition hover:underline flex items-center gap-1"
+                                style={{ color: 'var(--accent-primary)' }}
+                              >
+                                {expandedSummaries[article.id] ? 'Show less ↑' : 'Read more ↓'}
+                              </button>
+                            </div>
+                          )}
 
                           <ul
                             className="space-y-3 pt-2 border-t font-editorial text-base leading-relaxed"

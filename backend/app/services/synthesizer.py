@@ -3,15 +3,19 @@ import re
 import logging
 from typing import Optional
 from pydantic import BaseModel
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+# import torch
+# from transformers import AutoModelForCausalLM, AutoTokenizer
+from llama_cpp import Llama
 from backend.app.core.device import get_device_profile
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+DEFAULT_MODEL_PATH = Path(__file__).resolve().parent.parent.parent / "weights" / "qwen" / "qwen2.5-3b-instruct-q4_k_m.gguf"
 
 class EditorialDigest(BaseModel):
     takeaways: list[str]
     audio_script: str
+    summary: str = ""
 
 def clean_fallback_script(title: str, text: str) -> str:
     """Extract 1-2 complete sentences without ever cutting off mid-sentence."""
@@ -41,23 +45,23 @@ def clean_fallback_script(title: str, text: str) -> str:
     return " ".join(words).rstrip(' ,;:-') + "."
 
 class QwenSynthesizer:
-    def __init__(self, model_id: str = "Qwen/Qwen2.5-0.5B-Instruct"):
-        self.model_id = model_id
-        self.model = None
-        self.tokenizer = None
+    def __init__(self, model_id: str = DEFAULT_MODEL_PATH):
+        self.model_id = str(model_id)
+        self.llm = None
 
     def _ensure_loaded(self):
-        if self.model is None:
+        if self.llm is None:
             profile = get_device_profile()
+            n_gpu_layers = -1 if profile.device == "cuda" else 0
             logger.info(f"[*] Loading local LLM ({self.model_id}) on {profile.summary()}...")
-            self.tokenizer = AutoTokenizer.from_pretrained(self.model_id, local_files_only=True)
-            self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_id,
-                torch_dtype=profile.torch_dtype,
-                device_map=profile.device_map,
-                local_files_only=True
+            self.llm = Llama(
+                model_path=self.model_id,
+                n_gpu_layers=n_gpu_layers,
+                n_ctx=4096,
+                n_batch=512,
+                verbose=False
             )
-            logger.info(f"[+] Qwen model loaded successfully on {self.model.device}!")
+            logger.info(f"[+] Qwen model loaded successfully on {profile.device_name}!")
 
     def synthesize(self, title: str, content: str) -> EditorialDigest:
         self._ensure_loaded()
@@ -65,8 +69,8 @@ class QwenSynthesizer:
             {
                 "role": "system",
                 "content": (
-                    "You are a news editor. Summarize the article into 2 to 3 concise key takeaways and a punchy 2-sentence conversational voice script. "
-                    "Always finish complete sentences. Output strictly valid JSON with keys 'takeaways' and 'audio_script'."
+                    "You are a news editor. Summarize the article into 2 to 3 concise key takeaways and a punchy 2-sentence conversational voice script, and generate a comprehensive, multi-paragraph analytical summary."
+                    "Always finish complete sentences. Output strictly valid JSON with keys 'takeaways', 'summary' and 'audio_script'."
                 )
             },
             {
@@ -84,7 +88,8 @@ class QwenSynthesizer:
                     '{"takeaways": ["JWST spotted a galaxy formed 300 million years after the Big Bang", '
                     '"The galaxy is surprisingly bright and massive", '
                     '"Findings challenge current cosmic evolution models"], '
-                    '"audio_script": "In space news today, NASA\'s James Webb Telescope has spotted one of the earliest galaxies ever seen. Astronomers say its incredible brightness is forcing scientists to rethink how the early universe evolved."}'
+                    '"audio_script": "In space news today, NASA\'s James Webb Telescope has spotted one of the earliest galaxies ever seen. Astronomers say its incredible brightness is forcing scientists to rethink how the early universe evolved.", '
+                    '"summary": "Astronomers operating the James Webb Space Telescope have identified an unexpectedly bright and mature galaxy originating a mere 300 million years after the Big Bang. This observation challenges prevailing theories of early cosmological structure formation, suggesting that primordial star clustering accelerated much faster than previous models predicted."}'
                 )
             },
             {
@@ -92,18 +97,25 @@ class QwenSynthesizer:
                 "content": f"Title: {title}\n\nArticle Body:\n{content[:2500]}"
             }
         ]
-        prompt_text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        model_inputs = self.tokenizer([prompt_text], return_tensors="pt").to(self.model.device)
-        generated_ids = self.model.generate(
-            **model_inputs,
-            max_new_tokens=256,
+        # prompt_text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        # model_inputs = self.tokenizer([prompt_text], return_tensors="pt").to(self.model.device)
+        # generated_ids = self.model.generate(
+        #     **model_inputs,
+        #     max_new_tokens=256,
+        #     temperature=0.3,
+        #     do_sample=True
+        # )
+        # generated_ids = [
+        #     out_ids[len(in_ids):] for in_ids, out_ids in zip(model_inputs.input_ids, generated_ids)
+        # ]
+        # response_text = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
+        response = self.llm.create_chat_completion(
+            messages=messages,
+            max_tokens=800,
             temperature=0.3,
-            do_sample=True
+            response_format={"type": "json_object"}
         )
-        generated_ids = [
-            out_ids[len(in_ids):] for in_ids, out_ids in zip(model_inputs.input_ids, generated_ids)
-        ]
-        response_text = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
+        response_text = response["choices"][0]["message"]["content"]
         
         try:
             json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
@@ -121,14 +133,16 @@ class QwenSynthesizer:
 
                 return EditorialDigest(
                     takeaways=data.get("takeaways", [title]),
-                    audio_script=audio_script or clean_fallback_script(title, content)
+                    audio_script=audio_script or clean_fallback_script(title, content),
+                    summary=data.get("summary", "")
                 )
         except Exception as e:
             logger.warning(f"[-] Failed to parse LLM JSON: {e}. Using clean fallback.")
 
         return EditorialDigest(
             takeaways=[title],
-            audio_script=clean_fallback_script(title, content)
+            audio_script=clean_fallback_script(title, content),
+            summary=content[:500] + "..." if content else ""
         )
 
 _synthesizer: Optional[QwenSynthesizer] = None

@@ -3,6 +3,24 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.core.database import init_db
 from backend.app.api.routes import articles
+import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
+SYNC_INTERVAL_SECONDS = 30 * 60
+
+async def periodic_feed_sync():
+    from backend.app.services.ingestion import sync_all_feeds
+    while True:
+        try:
+            logger.info("[*] Running scheduled 30-minute background feed sync")
+            result = await asyncio.to_thread(sync_all_feeds)
+            logger.info(f"[+] Scheduled sync complete: {result}")
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"[-] Scheduled sync failed: {e}")
+        await asyncio.sleep(SYNC_INTERVAL_SECONDS)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -19,8 +37,14 @@ async def lifespan(app: FastAPI):
     from backend.app.services.tts import get_tts
     get_tts()
     print("[+] All neural models preloaded and ready in memory!")
+    sync_task = asyncio.create_task(periodic_feed_sync())
     yield
     # Shutdown logic (if any) goes here
+    sync_task.cancel()
+    try:
+        await sync_task
+    except asyncio.CancelledError:
+        pass
     print("[*] Shutting down...")
 
 app = FastAPI(
