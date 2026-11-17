@@ -796,7 +796,7 @@ export default function App() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
                   {furtherDispatches.map((article) => {
                     const isCurrent = currentTrack?.id === article.id && isPlaying
                     const isExpanded = !!expandedTimelines[article.id]
@@ -805,7 +805,7 @@ export default function App() {
                     return (
                       <article
                         key={article.id}
-                        className="rounded-2xl p-7 md:p-8 border flex flex-col justify-between space-y-6 shadow-sm transition hover:shadow-md"
+                        className="h-full md:min-h-[440px] rounded-2xl p-7 md:p-8 border flex flex-col justify-between space-y-6 shadow-sm transition hover:shadow-md"
                         style={{
                           backgroundColor: 'var(--bg-surface)',
                           borderColor: isCurrent
@@ -831,7 +831,9 @@ export default function App() {
                           </div>
 
                           <h4
-                            className="font-editorial text-xl md:text-2xl font-bold leading-snug"
+                            className={`font-editorial text-xl md:text-2xl font-bold leading-snug ${
+                              expandedSummaries[article.id] ? '' : 'line-clamp-2'
+                            }`}
                             style={{ color: 'var(--text-main)' }}
                           >
                             {article.title}
