@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.core.database import init_db
-from backend.app.api.routes import articles
+from backend.app.api.routes import articles, settings
 import asyncio
 import logging
 
@@ -36,6 +36,9 @@ async def lifespan(app: FastAPI):
     print("[*] Preloading Kokoro TTS neural voice engine...")
     from backend.app.services.tts import get_tts
     get_tts()
+    print("[*] Preloading CPU semantic embedding model...")
+    from backend.app.services.embeddings import get_embedding_service
+    get_embedding_service()._ensure_loaded()
     print("[+] All neural models preloaded and ready in memory!")
     sync_task = asyncio.create_task(periodic_feed_sync())
     yield
@@ -64,6 +67,7 @@ app.add_middleware(
 
 # Register our routes
 app.include_router(articles.router, prefix="/api")
+app.include_router(settings.router, prefix="/api")
 
 @app.get("/api/health")
 def health_check():

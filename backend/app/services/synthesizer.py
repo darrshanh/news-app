@@ -1,10 +1,12 @@
 import json
 import re
 import logging
+import threading
 from typing import Optional
 from pydantic import BaseModel
 from llama_cpp import Llama
 from backend.app.core.device import get_device_profile
+from backend.app.core.settings_store import get_runtime_settings
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -125,30 +127,52 @@ class QwenSynthesizer:
     def __init__(self, model_id: str = DEFAULT_MODEL_PATH):
         self.model_id = str(model_id)
         self.llm = None
+        self._lock = threading.Lock()
 
     def _ensure_loaded(self):
         if self.llm is None:
-            profile = get_device_profile()
-            n_gpu_layers = -1 if profile.device == "cuda" else 0
-            logger.info(f"[*] Loading local LLM ({self.model_id}) on {profile.summary()}...")
-            self.llm = Llama(
-                model_path=self.model_id,
-                n_gpu_layers=n_gpu_layers,
-                n_ctx=4096,
-                n_batch=512,
-                verbose=False
+            with self._lock:
+                if self.llm is None:
+                    profile = get_device_profile()
+                    n_gpu_layers = -1 if profile.device == "cuda" else 0
+                    logger.info(f"[*] Loading local LLM ({self.model_id}) on {profile.summary()}...")
+                    self.llm = Llama(
+                        model_path=self.model_id,
+                        n_gpu_layers=n_gpu_layers,
+                        n_ctx=4096,
+                        n_batch=512,
+                        verbose=False
+                    )
+                    logger.info(f"[+] Qwen model loaded successfully on {profile.device_name}!")
+
+    def chat(
+        self,
+        messages: list[dict],
+        max_tokens: int = 700,
+        temperature: float = 0.3,
+    ) -> str:
+        """Thread-safe wrapper around Llama.create_chat_completion."""
+        self._ensure_loaded()
+        with self._lock:
+            response = self.llm.create_chat_completion(
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                stop=["<|im_end|>", "</s>"],
             )
-            logger.info(f"[+] Qwen model loaded successfully on {profile.device_name}!")
+        return response["choices"][0]["message"]["content"].strip()
 
     def synthesize(self, title: str, content: str) -> EditorialDigest:
-        self._ensure_loaded()
+        cfg = get_runtime_settings()
+        target_words = cfg.summary_target_words
+        max_tokens = max(700, int(target_words * 4))
         messages = [
             {
                 "role": "system",
                 "content": (
                     "You are a senior news editor and broadcast anchor writer. Given an article, output strictly valid JSON "
                     "with keys 'summary', 'takeaways', and 'audio_script'.\n"
-                    "- 'summary': A comprehensive, analytical 2-to-3 paragraph briefing (~220 to 300 words total, paragraphs "
+                    f"- 'summary': A comprehensive, analytical 2-to-3 paragraph briefing (~{target_words} words total, paragraphs "
                     "separated by \\n\\n). Paragraph 1 covers core facts, figures, and entities; Paragraph 2 explains broader "
                     "industry, economic, or technical context; Paragraph 3 highlights implications or what to watch next. "
                     "Avoid filler phrases like 'In conclusion' or 'This article discusses'.\n"
@@ -165,13 +189,11 @@ class QwenSynthesizer:
                 "content": f"Title: {title}\n\nArticle Body:\n{content[:4000]}",
             },
         ]
-        response = self.llm.create_chat_completion(
+        response_text = self.chat(
             messages=messages,
-            max_tokens=1100,
-            temperature=0.35,
-            stop=["<|im_end|>", "</s>"],
+            max_tokens=max_tokens,
+            temperature=cfg.llm_temperature,
         )
-        response_text = response["choices"][0]["message"]["content"].strip()
         # Strip optional markdown code fences if emitted around JSON
         response_text = re.sub(r'^```(?:json)?\s*|\s*```$', '', response_text, flags=re.IGNORECASE).strip()
 

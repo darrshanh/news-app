@@ -6,6 +6,8 @@ from backend.app.services.scraper import fetch_feed_entries, extract_article_con
 from backend.app.services.tts import KokoroTTS
 from backend.app.models.article import ArticleCreate
 from backend.app.core.database import save_article, article_exists, get_article_by_id
+from backend.app.core.settings_store import get_runtime_settings
+from backend.app.services.embeddings import get_embedding_service
 from backend.app.services.synthesizer import get_synthesizer, EditorialDigest
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
@@ -66,6 +68,15 @@ def iter_sync_feed(feed_url: str, limit_per_feed: int = 5) -> int:
         )
         saved_id = save_article(article=article_data)
         if saved_id:
+            try:
+                get_embedding_service().embed_and_store_article(
+                    article_id=saved_id,
+                    title=article_data.title,
+                    summary=article_data.summary or "",
+                    content=article_data.content or "",
+                )
+            except Exception:
+                pass
             saved_article = get_article_by_id(saved_id)
             if saved_article:
                 yield saved_article
@@ -84,16 +95,18 @@ def sync_feed(feed_url: str, limit_per_feed: int = 5) -> int:
 
 def iter_sync_all_feeds(feed_urls: list[str] = None):
     feeds = feed_urls or DEFAULT_FEEDS
+    limit = get_runtime_settings().articles_per_feed
     with _sync_lock:
         for url in feeds:
-            yield from iter_sync_feed(url)
+            yield from iter_sync_feed(url, limit_per_feed=limit)
 
 def sync_all_feeds(feed_urls: list[str] = None) -> dict:
     """Ingest all configured feeds and return summary stats."""
     # Loops over feeds, aggregates counts, and returns e.g. {"new_articles": 7}
     feeds = feed_urls or DEFAULT_FEEDS
+    limit = get_runtime_settings().articles_per_feed
     newly_synced_feed_count = 0
     with _sync_lock:
         for url in feeds:
-            newly_synced_feed_count += sync_feed(url)
+            newly_synced_feed_count += sync_feed(url, limit_per_feed=limit)
     return {"status": "success", "new_articles": newly_synced_feed_count}

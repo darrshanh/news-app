@@ -1,5 +1,88 @@
 import React, { useState, useEffect, useRef } from 'react'
 
+const PALETTES = [
+  { id: 'palette-kyoto', name: 'Kyoto Hinoki', desc: 'Botanical Moss & Indigo', light: ['#F4F4EC', '#1F573E', '#2C4A78'], dark: ['#080A09', '#57C492', '#7BA8E8'] },
+  { id: 'palette-bordeaux', name: 'Bordeaux Petrol', desc: 'Oxblood Wine & Fjord Teal', light: ['#F7F3F0', '#822036', '#1F5B66'], dark: ['#0A0809', '#E86B84', '#5EC2D4'] },
+  { id: 'palette-cobalt', name: 'Marrakesh Cobalt', desc: 'Sunlit Sand & Ultramarine', light: ['#F6F1E7', '#2146A6', '#B86B11'], dark: ['#09090B', '#7097F8', '#F0B24C'] },
+  { id: 'palette-plum', name: 'Persimmon & Plum', desc: 'Vermilion & Mulberry', light: ['#F8F4EE', '#C43B28', '#6B3263'], dark: ['#0A090A', '#F26A52', '#CC85C2'] },
+  { id: 'palette-ft-salmon', name: 'FT Salmon', desc: 'Bisque Newsprint & Oxford', light: ['#FFF1E5', '#990F3D', '#0F5499'], dark: ['#0B0908', '#FF7597', '#66A8FF'] },
+  { id: 'palette-bauhaus', name: 'Weimar Bauhaus', desc: 'Archival Vellum & Brick', light: ['#F3EFE6', '#BE3124', '#1D4E89'], dark: ['#090909', '#F25C4E', '#68A2E8'] },
+  { id: 'palette-espresso', name: 'Milanese Espresso', desc: 'Roasted Coffee & Olive', light: ['#F6F2EC', '#6F381C', '#4A6128'], dark: ['#0A0806', '#DDA15E', '#99B865'] },
+  { id: 'palette-swiss', name: 'Swiss Archival', desc: 'Signal Orange & Slate', light: ['#F7F6F2', '#D9381E', '#1F4E5B'], dark: ['#080808', '#FF5538', '#75B8C8'] },
+]
+
+const VOICE_OPTIONS = [
+  { id: 'af_sarah', label: 'Sarah (US Female)' },
+  { id: 'af_heart', label: 'Heart (US Female)' },
+  { id: 'af_bella', label: 'Bella (US Female)' },
+  { id: 'am_adam', label: 'Adam (US Male)' },
+  { id: 'am_michael', label: 'Michael (US Male)' },
+  { id: 'bf_emma', label: 'Emma (UK Female)' },
+  { id: 'bm_george', label: 'George (UK Male)' },
+]
+
+const DEFAULT_AI_SETTINGS = {
+  llm_temperature: 0.35,
+  summary_target_words: 250,
+  context_min_score: 0.42,
+  context_max_precedents: 4,
+  articles_per_feed: 5,
+  tts_voice: 'af_sarah',
+}
+
+const AI_SLIDERS = [
+  {
+    key: 'llm_temperature',
+    label: 'LLM Temperature',
+    hint: 'Lower stays strict and factual; higher allows freer phrasing.',
+    min: 0.0,
+    max: 1.0,
+    step: 0.05,
+    format: (v) => Number(v).toFixed(2),
+  },
+  {
+    key: 'summary_target_words',
+    label: 'Target Summary Length',
+    hint: 'Target word budget for each analytical briefing.',
+    min: 100,
+    max: 400,
+    step: 25,
+    format: (v) => `${v} words`,
+  },
+  {
+    key: 'context_min_score',
+    label: 'Context Cosine min_score',
+    hint: 'Minimum semantic similarity (0.20–0.75) to link archive articles.',
+    min: 0.2,
+    max: 0.75,
+    step: 0.01,
+    format: (v) => Number(v).toFixed(2),
+  },
+  {
+    key: 'context_max_precedents',
+    label: 'Max Timeline Precedents',
+    hint: 'Max historical archive stories stitched into a timeline.',
+    min: 1,
+    max: 6,
+    step: 1,
+    format: (v) => `${v} stories`,
+  },
+  {
+    key: 'articles_per_feed',
+    label: 'Articles Per RSS Feed',
+    hint: 'How many recent entries each feed scans per sync.',
+    min: 1,
+    max: 10,
+    step: 1,
+    format: (v) => `${v} / feed`,
+  },
+]
+
+function getVoiceShortName(voiceId) {
+  const match = VOICE_OPTIONS.find((v) => v.id === voiceId)
+  return match ? match.label.split(' ')[0] : 'Sarah'
+}
+
 /**
  * Safely parse the JSON string takeaways stored in SQLite.
  * If null, invalid, or empty, falls back to the article headline.
@@ -52,9 +135,29 @@ export default function App() {
   const [articles, setArticles] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSyncing, setIsSyncing] = useState(false)
-  const [isDark, setIsDark] = useState(false)
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem('news_agent_is_dark') === 'true'
+  })
+  const [dayPalette, setDayPalette] = useState(() => {
+    if (typeof window === 'undefined') return 'palette-kyoto'
+    return localStorage.getItem('news_agent_day_palette') || 'palette-kyoto'
+  })
+  const [nightPalette, setNightPalette] = useState(() => {
+    if (typeof window === 'undefined') return 'palette-bordeaux'
+    return localStorage.getItem('news_agent_night_palette') || 'palette-bordeaux'
+  })
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [paletteEditMode, setPaletteEditMode] = useState('light')
+  const [aiSettings, setAiSettings] = useState(DEFAULT_AI_SETTINGS)
+  const [isSavingSettings, setIsSavingSettings] = useState(false)
+  const [settingsStatus, setSettingsStatus] = useState('')
   const [expandedTimelines, setExpandedTimelines] = useState({})
   const [expandedSummaries, setExpandedSummaries] = useState({})
+  const [cardHeights, setCardHeights] = useState({})
+  const [contextById, setContextById] = useState({})
+  const [contextLoading, setContextLoading] = useState({})
+  const [contextErrors, setContextErrors] = useState({})
   const [feedback, setFeedback] = useState({})
 
   // Audio Playback State
@@ -94,9 +197,109 @@ export default function App() {
     }
   }
 
+  const fetchSettings = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/settings`)
+      if (res.ok) {
+        const data = await res.json()
+        setAiSettings((prev) => ({
+          ...prev,
+          llm_temperature: data.llm_temperature ?? prev.llm_temperature,
+          summary_target_words: data.summary_target_words ?? prev.summary_target_words,
+          context_min_score: data.context_min_score ?? prev.context_min_score,
+          context_max_precedents: data.context_max_precedents ?? prev.context_max_precedents,
+          articles_per_feed: data.articles_per_feed ?? prev.articles_per_feed,
+          tts_voice: data.tts_voice || prev.tts_voice,
+        }))
+      }
+    } catch (err) {
+      console.error('Failed to fetch AI settings:', err)
+    }
+  }
+
+  const saveAiSettings = async (overrideSettings = null) => {
+    const payload = overrideSettings || aiSettings
+    setIsSavingSettings(true)
+    setSettingsStatus('')
+    try {
+      const res = await fetch(`${API_BASE}/api/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const saved = await res.json()
+      setAiSettings((prev) => ({ ...prev, ...saved }))
+      setSettingsStatus('✓ Saved')
+      setTimeout(() => setSettingsStatus(''), 2500)
+    } catch (err) {
+      console.error('Failed to save AI settings:', err)
+      setSettingsStatus('Failed to save')
+    } finally {
+      setIsSavingSettings(false)
+    }
+  }
+
+  const resetAiSettings = () => {
+    setAiSettings(DEFAULT_AI_SETTINGS)
+    saveAiSettings(DEFAULT_AI_SETTINGS)
+  }
+
+  const handleThemeToggle = () => {
+    const next = !isDark
+    setIsDark(next)
+    setPaletteEditMode(next ? 'dark' : 'light')
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('news_agent_is_dark', String(next))
+    }
+  }
+
+  const selectPalette = (paletteId) => {
+    if (paletteEditMode === 'dark') {
+      setNightPalette(paletteId)
+      if (!isDark) {
+        setIsDark(true)
+        if (typeof window !== 'undefined') localStorage.setItem('news_agent_is_dark', 'true')
+      }
+      if (typeof window !== 'undefined') localStorage.setItem('news_agent_night_palette', paletteId)
+    } else {
+      setDayPalette(paletteId)
+      if (isDark) {
+        setIsDark(false)
+        if (typeof window !== 'undefined') localStorage.setItem('news_agent_is_dark', 'false')
+      }
+      if (typeof window !== 'undefined') localStorage.setItem('news_agent_day_palette', paletteId)
+    }
+  }
+
   useEffect(() => {
     fetchArticles()
+    fetchSettings()
   }, [])
+
+  // Measure rendered collapsed card heights after feed load/refresh to balance 2-column masonry
+  useEffect(() => {
+    if (articles.length <= 1) return
+    const raf = requestAnimationFrame(() => {
+      const els = document.querySelectorAll('[data-dispatch-card-id]')
+      setCardHeights((prev) => {
+        let changed = false
+        const next = { ...prev }
+        els.forEach((el) => {
+          if (el.offsetParent === null) return
+          const id = Number(el.getAttribute('data-dispatch-card-id'))
+          if (expandedSummaries[id] || expandedTimelines[id]) return
+          const h = el.offsetHeight
+          if (h > 0 && (!prev[id] || Math.abs(prev[id] - h) > 8)) {
+            next[id] = h
+            changed = true
+          }
+        })
+        return changed ? next : prev
+      })
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [articles])
 
   // 2. Refresh / Sync: instant DB cache check + real-time SSE stream
   const handleSync = async () => {
@@ -173,7 +376,8 @@ export default function App() {
     setAudioDuration(0)
     setAudioProgress(0)
     if (audioRef.current) {
-      audioRef.current.src = `${API_BASE}/api/articles/${article.id}/audio`
+      const voiceParam = encodeURIComponent(aiSettings.tts_voice || 'af_sarah')
+      audioRef.current.src = `${API_BASE}/api/articles/${article.id}/audio?voice=${voiceParam}`
       audioRef.current.playbackRate = playbackRate
       audioRef.current.play().catch((err) => console.log('Audio autoplay prevented:', err))
     }
@@ -216,12 +420,47 @@ export default function App() {
     }
   }
 
-  // 8. Toggle collapsible timeline
+  // 8. Fetch and toggle collapsible LangGraph historical context timeline
+  const fetchArticleContext = async (articleId, refresh = false) => {
+    if (contextLoading[articleId]) return
+    setContextLoading((prev) => ({ ...prev, [articleId]: true }))
+    setContextErrors((prev) => ({ ...prev, [articleId]: null }))
+    try {
+      const url = `${API_BASE}/api/articles/${articleId}/context${refresh ? '?refresh=true' : ''}`
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      setContextById((prev) => ({ ...prev, [articleId]: data }))
+    } catch (err) {
+      console.error('Failed to fetch historical context:', err)
+      setContextErrors((prev) => ({ ...prev, [articleId]: 'Could not trace story arc right now.' }))
+    } finally {
+      setContextLoading((prev) => ({ ...prev, [articleId]: false }))
+    }
+  }
+
   const toggleTimeline = (articleId) => {
+    const willExpand = !expandedTimelines[articleId]
     setExpandedTimelines((prev) => ({
       ...prev,
-      [articleId]: !prev[articleId],
+      [articleId]: willExpand,
     }))
+
+    if (willExpand && !contextById[articleId]) {
+      const target = articles.find((a) => a.id === articleId)
+      if (target?.historical_context) {
+        try {
+          const parsed = JSON.parse(target.historical_context)
+          if (parsed && typeof parsed === 'object') {
+            setContextById((prev) => ({ ...prev, [articleId]: parsed }))
+            return
+          }
+        } catch {
+          // Fall through to backend context generation
+        }
+      }
+      fetchArticleContext(articleId)
+    }
   }
 
   // 8b. Toggle analytical summary expansion
@@ -230,6 +469,163 @@ export default function App() {
       ...prev,
       [articleId]: !prev[articleId],
     }))
+  }
+
+  // Shared renderer for both Lead Story and Further Dispatches context drawers
+  const renderContextPanel = (article) => {
+    const ctx = contextById[article.id]
+    const isCtxLoading = !!contextLoading[article.id]
+    const ctxError = contextErrors[article.id]
+
+    return (
+      <div
+        className="pt-5 border-t space-y-4 text-xs"
+        style={{ borderColor: 'var(--border-hairline)' }}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div
+            className="font-semibold uppercase tracking-widest"
+            style={{ color: 'var(--accent-secondary)' }}
+          >
+            Story Arc &amp; Prior Precedents
+          </div>
+          <div className="flex items-center gap-2">
+            {ctx && ctx.related_count > 0 && (
+              <span
+                className="px-2 py-0.5 rounded-full text-[11px] font-medium"
+                style={{
+                  backgroundColor: 'var(--tag-bg)',
+                  color: 'var(--text-body)',
+                }}
+              >
+                {ctx.related_count} linked {ctx.related_count === 1 ? 'story' : 'stories'}
+              </span>
+            )}
+            <button
+              onClick={() => fetchArticleContext(article.id, true)}
+              disabled={isCtxLoading}
+              className="px-2 py-0.5 rounded border text-[11px] cursor-pointer hover:opacity-80 disabled:opacity-50"
+              style={{
+                borderColor: 'var(--border-strong)',
+                color: 'var(--text-muted)',
+              }}
+              title="Re-run LangGraph historical context agent"
+            >
+              {isCtxLoading ? 'Tracing...' : '↻ Refresh'}
+            </button>
+          </div>
+        </div>
+
+        {isCtxLoading && !ctx && (
+          <div
+            className="py-2 font-editorial text-sm italic animate-pulse"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            Tracing entities, archive precedents, and timeline with LangGraph...
+          </div>
+        )}
+
+        {ctxError && !ctx && (
+          <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--text-muted)' }}>
+            <span>{ctxError}</span>
+            <button
+              onClick={() => fetchArticleContext(article.id, true)}
+              className="underline cursor-pointer font-semibold"
+              style={{ color: 'var(--accent-primary)' }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {ctx && (
+          <div className="space-y-4">
+            {ctx.story_arc && (
+              <p
+                className="font-editorial text-sm leading-relaxed"
+                style={{ color: 'var(--text-body)' }}
+              >
+                {ctx.story_arc}
+              </p>
+            )}
+
+            {Array.isArray(ctx.entities) && ctx.entities.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {ctx.entities.map((ent, idx) => (
+                  <span
+                    key={idx}
+                    className="px-2 py-0.5 rounded-full text-[11px] font-medium"
+                    style={{
+                      backgroundColor: 'var(--tag-bg)',
+                      color: 'var(--text-body)',
+                    }}
+                  >
+                    {ent}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {Array.isArray(ctx.milestones) && ctx.milestones.length > 0 && (
+              <div
+                className="border-l-2 pl-4 space-y-3.5"
+                style={{ borderColor: 'var(--accent-secondary)' }}
+              >
+                {ctx.milestones.map((m, idx) => (
+                  <div key={idx} className="space-y-1">
+                    <div
+                      className="text-[11px] font-bold uppercase tracking-wider"
+                      style={{ color: 'var(--text-muted)' }}
+                    >
+                      {m.date || 'Milestone'}
+                    </div>
+                    <div className="text-sm font-semibold leading-snug" style={{ color: 'var(--text-main)' }}>
+                      {m.source_url ? (
+                        <a
+                          href={m.source_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="hover:underline"
+                          style={{ color: 'var(--accent-primary)' }}
+                        >
+                          {m.headline} ↗
+                        </a>
+                      ) : (
+                        m.headline
+                      )}
+                    </div>
+                    <p
+                      className="font-editorial text-xs md:text-sm leading-relaxed"
+                      style={{ color: 'var(--text-body)' }}
+                    >
+                      {m.summary}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div
+          className="pt-3 border-t space-y-1"
+          style={{ borderColor: 'var(--border-hairline)' }}
+        >
+          <div
+            className="text-[11px] font-bold uppercase tracking-wider"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            AI Broadcast Script
+          </div>
+          <p
+            className="font-editorial text-xs md:text-sm italic leading-relaxed"
+            style={{ color: 'var(--text-body)' }}
+          >
+            &ldquo;{article.audio_script || article.title}&rdquo;
+          </p>
+        </div>
+      </div>
+    )
   }
 
   // 9. Personalization feedback (thumbs up / down)
@@ -251,9 +647,14 @@ export default function App() {
   const leadStory = articles[0]
   const furtherDispatches = articles.slice(1)
 
+  const voiceName = getVoiceShortName(aiSettings.tts_voice)
+  const activePaletteClass = isDark
+    ? `${nightPalette} mode-dark`
+    : `${dayPalette} mode-light`
+
   return (
     <div
-      className={`${isDark ? 'dark' : ''} min-h-screen font-sans-ui transition-colors duration-300 relative pb-32`}
+      className={`${activePaletteClass} min-h-screen font-sans-ui transition-colors duration-300 relative pb-32`}
       style={{ backgroundColor: 'var(--bg-page)', color: 'var(--text-main)' }}
     >
       {/* Hidden HTML5 Audio Element streaming from FastAPI backend */}
@@ -288,19 +689,35 @@ export default function App() {
             </h1>
           </div>
 
-          {/* Controls: Theme Toggle & Refresh Feeds */}
-          <div className="flex items-center gap-3">
+          {/* Controls: Theme Toggle, Settings Drawer, & Refresh Feeds */}
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
-              onClick={() => setIsDark(!isDark)}
+              onClick={handleThemeToggle}
               className="px-4 py-2 rounded-full text-xs font-semibold border transition hover:opacity-85 cursor-pointer shadow-sm"
               style={{
                 borderColor: 'var(--border-strong)',
                 backgroundColor: 'var(--bg-surface)',
                 color: 'var(--text-main)',
               }}
-              title="Toggle Day (Kyoto Hinoki) / Night (Pitch-Black Bordeaux) Mode"
+              title="Toggle Day / Night Edition"
             >
               {isDark ? '☀️ Day Edition' : '🌑 Night Edition'}
+            </button>
+
+            <button
+              onClick={() => {
+                setPaletteEditMode(isDark ? 'dark' : 'light')
+                setIsSettingsOpen(true)
+              }}
+              className="px-4 py-2 rounded-full text-xs font-semibold border transition hover:opacity-85 cursor-pointer shadow-sm"
+              style={{
+                borderColor: 'var(--border-strong)',
+                backgroundColor: 'var(--bg-surface)',
+                color: 'var(--text-main)',
+              }}
+              title="Open Theme & AI Settings"
+            >
+              ⚙ Settings
             </button>
 
             <button
@@ -384,7 +801,7 @@ export default function App() {
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                   <span>Audio Edition</span>
                   <span>•</span>
-                  <span>Voice: Sarah (Kokoro)</span>
+                  <span>Voice: {voiceName} (Kokoro)</span>
                   <span>•</span>
                   <span>{articles.length} Briefings Ingested</span>
                 </div>
@@ -567,7 +984,7 @@ export default function App() {
                       >
                         {currentTrack?.id === leadStory.id && isPlaying
                           ? '⏸ Pause Audio'
-                          : '▶ Listen (Sarah)'}
+                          : `▶ Listen (${voiceName})`}
                       </button>
 
                       <button
@@ -614,52 +1031,7 @@ export default function App() {
                   </div>
 
                   {/* Expandable Historical Context Timeline */}
-                  {expandedTimelines[leadStory.id] && (
-                    <div
-                      className="pt-5 border-t space-y-4"
-                      style={{ borderColor: 'var(--border-hairline)' }}
-                    >
-                      <div
-                        className="text-xs font-semibold uppercase tracking-widest"
-                        style={{ color: 'var(--accent-secondary)' }}
-                      >
-                        Story Arc &amp; Prior Precedents
-                      </div>
-                      <div
-                        className="border-l-2 pl-5 space-y-3.5"
-                        style={{ borderColor: 'var(--accent-secondary)' }}
-                      >
-                        <div className="space-y-1">
-                          <div
-                            className="text-xs font-bold uppercase tracking-wider"
-                            style={{ color: 'var(--text-muted)' }}
-                          >
-                            Initial Discovery
-                          </div>
-                          <p
-                            className="font-editorial text-sm leading-relaxed"
-                            style={{ color: 'var(--text-body)' }}
-                          >
-                            Extracted from live feed via automated reader and cleaned for executive synthesis.
-                          </p>
-                        </div>
-                        <div className="space-y-1">
-                          <div
-                            className="text-xs font-bold uppercase tracking-wider"
-                            style={{ color: 'var(--text-muted)' }}
-                          >
-                            Audio Generation
-                          </div>
-                          <p
-                            className="font-editorial text-sm leading-relaxed italic"
-                            style={{ color: 'var(--text-body)' }}
-                          >
-                            &ldquo;{leadStory.audio_script || leadStory.title}&rdquo;
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  {expandedTimelines[leadStory.id] && renderContextPanel(leadStory)}
                 </article>
 
                 {/* Sidebar Column: Personalization Radar + Architecture Note (4 Columns) */}
@@ -805,6 +1177,7 @@ export default function App() {
                     return (
                       <article
                         key={article.id}
+                        data-dispatch-card-id={article.id}
                         className="rounded-2xl p-7 md:p-8 border flex flex-col justify-between space-y-6 shadow-sm transition hover:shadow-md"
                         style={{
                           backgroundColor: 'var(--bg-surface)',
@@ -906,7 +1279,7 @@ export default function App() {
                                   : 'var(--text-main)',
                               }}
                             >
-                              {isCurrent ? '⏸ Pause' : '▶ Listen (Sarah)'}
+                              {isCurrent ? '⏸ Pause' : `▶ Listen (${voiceName})`}
                             </button>
                             <button
                               onClick={() => toggleTimeline(article.id)}
@@ -949,25 +1322,7 @@ export default function App() {
                           </div>
                         </div>
 
-                        {isExpanded && (
-                          <div
-                            className="pt-4 border-t text-xs space-y-2"
-                            style={{ borderColor: 'var(--border-hairline)' }}
-                          >
-                            <div
-                              className="font-bold uppercase tracking-wider"
-                              style={{ color: 'var(--accent-secondary)' }}
-                            >
-                              AI Broadcast Script
-                            </div>
-                            <p
-                              className="font-editorial text-sm italic"
-                              style={{ color: 'var(--text-body)' }}
-                            >
-                              &ldquo;{article.audio_script || article.title}&rdquo;
-                            </p>
-                          </div>
-                        )}
+                        {isExpanded && renderContextPanel(article)}
                       </article>
                     )
                   }
@@ -979,24 +1334,24 @@ export default function App() {
 
                   for (const article of furtherDispatches) {
                     const bullets = parseTakeaways(article.takeaways, article.title)
-                    const titleLines = Math.ceil((article.title?.length || 40) / 36)
+                    const titleLines = Math.ceil((article.title?.length || 32) / 32)
                     const bulletsHeight = bullets.reduce(
-                      (sum, b) => sum + Math.ceil((b?.length || 40) / 48) * 24 + 12,
+                      (sum, b) => sum + Math.ceil((b?.length || 44) / 44) * 26 + 12,
                       0
                     )
                     const estHeight =
-                      240 +
-                      titleLines * 28 +
-                      (article.summary ? 75 : 0) +
-                      bulletsHeight +
-                      32
+                      250 +
+                      titleLines * 30 +
+                      (article.summary ? 84 : 0) +
+                      bulletsHeight
+                    const cardSpan = (cardHeights[article.id] || estHeight) + 32
 
                     if (leftHeight <= rightHeight) {
                       leftCol.push(article)
-                      leftHeight += estHeight
+                      leftHeight += cardSpan
                     } else {
                       rightCol.push(article)
-                      rightHeight += estHeight
+                      rightHeight += cardSpan
                     }
                   }
 
@@ -1109,6 +1464,255 @@ export default function App() {
             </button>
           </div>
         </footer>
+      )}
+
+      {/* ============================================================== */}
+      {/* 4. SETTINGS SLIDE-OVER PANEL (Palettes + AI / TTS Parameters) */}
+      {/* ============================================================== */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs"
+            onClick={() => setIsSettingsOpen(false)}
+          />
+
+          {/* Drawer */}
+          <aside
+            className="relative z-10 w-full max-w-md h-full overflow-y-auto border-l p-6 md:p-7 space-y-7 shadow-2xl"
+            style={{
+              backgroundColor: 'var(--bg-surface)',
+              borderColor: 'var(--border-strong)',
+              color: 'var(--text-main)',
+            }}
+          >
+            <div
+              className="flex items-center justify-between pb-4 border-b"
+              style={{ borderColor: 'var(--border-hairline)' }}
+            >
+              <div>
+                <h2 className="font-editorial text-2xl font-bold">Dispatch Settings</h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  Customize editorial palettes and local AI inference behavior
+                </p>
+              </div>
+              <button
+                onClick={() => setIsSettingsOpen(false)}
+                className="w-8 h-8 rounded-full border text-sm font-bold cursor-pointer hover:opacity-80"
+                style={{
+                  borderColor: 'var(--border-strong)',
+                  color: 'var(--text-body)',
+                }}
+                aria-label="Close settings"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Section 1: Editorial Color Palettes */}
+            <section className="space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <h3
+                  className="text-xs font-bold uppercase tracking-widest"
+                  style={{ color: 'var(--accent-secondary)' }}
+                >
+                  Color Palette
+                </h3>
+                <div
+                  className="inline-flex rounded-full p-0.5 border text-[11px] font-semibold"
+                  style={{
+                    borderColor: 'var(--border-strong)',
+                    backgroundColor: 'var(--bg-subtle)',
+                  }}
+                >
+                  <button
+                    onClick={() => setPaletteEditMode('light')}
+                    className="px-3 py-1 rounded-full cursor-pointer transition"
+                    style={{
+                      backgroundColor:
+                        paletteEditMode === 'light' ? 'var(--accent-primary)' : 'transparent',
+                      color:
+                        paletteEditMode === 'light'
+                          ? 'var(--accent-primary-fg)'
+                          : 'var(--text-body)',
+                    }}
+                  >
+                    ☀️ Day
+                  </button>
+                  <button
+                    onClick={() => setPaletteEditMode('dark')}
+                    className="px-3 py-1 rounded-full cursor-pointer transition"
+                    style={{
+                      backgroundColor:
+                        paletteEditMode === 'dark' ? 'var(--accent-primary)' : 'transparent',
+                      color:
+                        paletteEditMode === 'dark'
+                          ? 'var(--accent-primary-fg)'
+                          : 'var(--text-body)',
+                    }}
+                  >
+                    🌑 Night
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                {PALETTES.map((p) => {
+                  const selectedId = paletteEditMode === 'dark' ? nightPalette : dayPalette
+                  const isSelected = selectedId === p.id
+                  const swatches = paletteEditMode === 'dark' ? p.dark : p.light
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => selectPalette(p.id)}
+                      className="text-left p-3 rounded-xl border transition cursor-pointer hover:opacity-90 space-y-1.5"
+                      style={{
+                        backgroundColor: isSelected ? 'var(--tag-bg)' : 'var(--bg-page)',
+                        borderColor: isSelected
+                          ? 'var(--accent-primary)'
+                          : 'var(--border-hairline)',
+                      }}
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-xs font-bold truncate">{p.name}</span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {swatches.map((hex, i) => (
+                            <span
+                              key={i}
+                              className="w-3 h-3 rounded-full border"
+                              style={{
+                                backgroundColor: hex,
+                                borderColor: 'var(--border-strong)',
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <div className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>
+                        {p.desc}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+
+            {/* Section 2: AI & Audio Parameters */}
+            <section
+              className="space-y-4 pt-5 border-t"
+              style={{ borderColor: 'var(--border-hairline)' }}
+            >
+              <div className="flex items-center justify-between">
+                <h3
+                  className="text-xs font-bold uppercase tracking-widest"
+                  style={{ color: 'var(--accent-secondary)' }}
+                >
+                  AI &amp; Retrieval Parameters
+                </h3>
+                {settingsStatus && (
+                  <span
+                    className="text-xs font-semibold"
+                    style={{ color: 'var(--accent-primary)' }}
+                  >
+                    {settingsStatus}
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                {AI_SLIDERS.map((ctrl) => (
+                  <div key={ctrl.key} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <label className="font-semibold" style={{ color: 'var(--text-main)' }}>
+                        {ctrl.label}
+                      </label>
+                      <span
+                        className="font-mono font-bold"
+                        style={{ color: 'var(--accent-primary)' }}
+                      >
+                        {ctrl.format(aiSettings[ctrl.key])}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={ctrl.min}
+                      max={ctrl.max}
+                      step={ctrl.step}
+                      value={aiSettings[ctrl.key]}
+                      onChange={(e) => {
+                        const val = Number.isInteger(ctrl.step)
+                          ? parseInt(e.target.value, 10)
+                          : parseFloat(e.target.value)
+                        setAiSettings((prev) => ({ ...prev, [ctrl.key]: val }))
+                      }}
+                      className="w-full cursor-pointer"
+                      style={{ accentColor: 'var(--accent-primary)' }}
+                    />
+                    <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                      {ctrl.hint}
+                    </p>
+                  </div>
+                ))}
+
+                {/* Kokoro Voice Selector */}
+                <div className="space-y-1.5">
+                  <label
+                    className="block text-xs font-semibold"
+                    style={{ color: 'var(--text-main)' }}
+                  >
+                    Kokoro TTS Narrator Voice
+                  </label>
+                  <select
+                    value={aiSettings.tts_voice}
+                    onChange={(e) =>
+                      setAiSettings((prev) => ({ ...prev, tts_voice: e.target.value }))
+                    }
+                    className="w-full px-3 py-2 rounded-lg border text-xs font-medium cursor-pointer"
+                    style={{
+                      backgroundColor: 'var(--bg-page)',
+                      borderColor: 'var(--border-strong)',
+                      color: 'var(--text-main)',
+                    }}
+                  >
+                    {VOICE_OPTIONS.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div
+                className="pt-4 flex items-center justify-between gap-3 border-t"
+                style={{ borderColor: 'var(--border-hairline)' }}
+              >
+                <button
+                  onClick={resetAiSettings}
+                  disabled={isSavingSettings}
+                  className="px-3.5 py-2 rounded-full text-xs font-semibold border cursor-pointer hover:opacity-85 disabled:opacity-50"
+                  style={{
+                    borderColor: 'var(--border-strong)',
+                    color: 'var(--text-body)',
+                  }}
+                >
+                  Reset Defaults
+                </button>
+                <button
+                  onClick={() => saveAiSettings()}
+                  disabled={isSavingSettings}
+                  className="px-5 py-2 rounded-full text-xs font-bold cursor-pointer hover:opacity-90 disabled:opacity-50 shadow-sm"
+                  style={{
+                    backgroundColor: 'var(--accent-primary)',
+                    color: 'var(--accent-primary-fg)',
+                  }}
+                >
+                  {isSavingSettings ? 'Saving...' : 'Save AI Settings'}
+                </button>
+              </div>
+            </section>
+          </aside>
+        </div>
       )}
     </div>
   )

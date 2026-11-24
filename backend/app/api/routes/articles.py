@@ -2,7 +2,13 @@ from fastapi import APIRouter, HTTPException, Response
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
-from backend.app.core.database import get_article_by_id, get_articles
+from backend.app.core.database import (
+    get_article_by_id,
+    get_articles,
+    save_article_context,
+)
+from backend.app.core.settings_store import get_runtime_settings
+from backend.app.services.context_agent import build_historical_context
 from backend.app.services.ingestion import sync_feed, sync_all_feeds, iter_sync_all_feeds
 from backend.app.services.tts import get_tts
 from typing import Optional
@@ -46,6 +52,26 @@ def stream_sync():
         },
     )
 
+@router.get("/{article_id}/context")
+def get_article_context(article_id: int, refresh: bool = False):
+    """Return cached or freshly stitched LangGraph historical context for an article."""
+    article = get_article_by_id(article_id=article_id)
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    if not refresh and article.get("historical_context"):
+        try:
+            cached = json.loads(article["historical_context"])
+            if isinstance(cached, dict):
+                return cached
+        except Exception:
+            pass
+
+    result = build_historical_context(article)
+    save_article_context(article_id, json.dumps(result))
+    return result
+
+
 @router.get("/{article_id}/audio")
 def stream_article_audio(article_id: int, voice: Optional[str] = None):
     article = get_article_by_id(article_id=article_id)
@@ -54,7 +80,8 @@ def stream_article_audio(article_id: int, voice: Optional[str] = None):
     body_text = (article.get("summary") or article.get("content") or "")[:300]
     title = article.get("title", "")
     text_to_speak = article.get("audio_script") or f"{title}. {body_text}"
-    audio_buffer = get_tts().synthesize_to_bytes(text=text_to_speak, voice=voice)
+    selected_voice = voice or get_runtime_settings().tts_voice
+    audio_buffer = get_tts().synthesize_to_bytes(text=text_to_speak, voice=selected_voice)
     audio_bytes = audio_buffer.getvalue()
     
     return Response(

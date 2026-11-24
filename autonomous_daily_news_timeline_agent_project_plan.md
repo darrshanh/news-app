@@ -203,3 +203,10 @@ This roadmap is ordered by architectural dependency. Each phase produces an imme
 * [ ] **Timeline Grounding:** Every node in the retrospective timeline contains an absolute ISO timestamp verified against search results.
 * [ ] **Bandit Stability:** Matrix $\mathbf{A}$ updates remain numerically stable without matrix singularity issues (regularized with identity matrix $\mathbf{I}_d$).
 * [ ] **Mobile Usability:** PWA launches in standalone mode on Android without address bar clutter and handles lock-screen audio playback.
+
+---
+
+## 7. Backlog & Quality Iterations
+
+* [ ] **Rich Card Media (Article Cover Images):** Extract `og:image` / lead article thumbnails during scraping (`scraper.py`), persist image URLs in SQLite, and render clean editorial card headers in `frontend/src/App.jsx` so the feed looks visually engaging rather than text-only.
+* [ ] **Historical Context Frontier-Model Evaluation Loop:** Build an evaluation-feedback harness that runs the local LangGraph Historical Context pipeline on sample articles, sends the generated story arc and chronological milestones to a frontier model API (e.g., ChatGPT or Claude) for structured editorial & factual critique, and iteratively refines prompts, retrieval thresholds (`min_score`), and graph logic until evaluation feedback is consistently positive.
