@@ -16,13 +16,23 @@ class BaseCache(ABC):
         pass
 
 class InMemoryCache(BaseCache):
-    def __init__(self):
+    def __init__(self, max_entries: int = 100):
         self._store: dict[str, bytes] = {}
+        self.max_entries = max_entries
 
     def get(self, key: str) -> Optional[bytes]:
-        return self._store.get(key)
+        value = self._store.get(key)
+        if value is not None:
+            # Refresh LRU position
+            self._store[key] = self._store.pop(key)
+        return value
 
     def set(self, key: str, value: bytes, ttl_seconds: int = 86400) -> None:
+        if key in self._store:
+            self._store.pop(key)
+        elif len(self._store) >= self.max_entries:
+            oldest_key = next(iter(self._store))
+            del self._store[oldest_key]
         self._store[key] = value
 
 class RedisCache(BaseCache):

@@ -47,14 +47,14 @@ def stream_sync():
     )
 
 @router.get("/{article_id}/audio")
-def stream_article_audio(article_id: int):
+def stream_article_audio(article_id: int, voice: Optional[str] = None):
     article = get_article_by_id(article_id=article_id)
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
     body_text = (article.get("summary") or article.get("content") or "")[:300]
     title = article.get("title", "")
     text_to_speak = article.get("audio_script") or f"{title}. {body_text}"
-    audio_buffer = get_tts().synthesize_to_bytes(text=text_to_speak)
+    audio_buffer = get_tts().synthesize_to_bytes(text=text_to_speak, voice=voice)
     audio_bytes = audio_buffer.getvalue()
     
     return Response(
