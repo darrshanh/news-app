@@ -27,6 +27,7 @@ const DEFAULT_AI_SETTINGS = {
   context_min_score: 0.42,
   context_max_precedents: 4,
   articles_per_feed: 5,
+  bandit_alpha: 0.4,
   tts_voice: 'af_sarah',
 }
 
@@ -75,6 +76,15 @@ const AI_SLIDERS = [
     max: 10,
     step: 1,
     format: (v) => `${v} / feed`,
+  },
+  {
+    key: 'bandit_alpha',
+    label: 'LinUCB Exploration (α)',
+    hint: '0.0 exploits known likes strictly; higher explores novel topics.',
+    min: 0.0,
+    max: 1.5,
+    step: 0.05,
+    format: (v) => `α = ${Number(v).toFixed(2)}`,
   },
 ]
 
@@ -159,6 +169,8 @@ export default function App() {
   const [contextLoading, setContextLoading] = useState({})
   const [contextErrors, setContextErrors] = useState({})
   const [feedback, setFeedback] = useState({})
+  const [sortMode, setSortMode] = useState('personalized')
+  const [radarStats, setRadarStats] = useState(null)
 
   // Audio Playback State
   const [currentTrack, setCurrentTrack] = useState(null)
@@ -183,17 +195,36 @@ export default function App() {
   ).replace(/\/+$/, '')
 
   // 1. Fetch articles from FastAPI backend
-  const fetchArticles = async () => {
+  const fetchArticles = async (mode = sortMode) => {
     try {
-      const res = await fetch(`${API_BASE}/api/articles?limit=30`)
+      const res = await fetch(`${API_BASE}/api/articles?limit=30&sort=${encodeURIComponent(mode)}`)
       if (res.ok) {
         const data = await res.json()
         setArticles(data)
+        const hydratedVotes = {}
+        data.forEach((a) => {
+          if (a.user_vote === 'up' || a.user_vote === 'down') {
+            hydratedVotes[a.id] = a.user_vote
+          }
+        })
+        setFeedback((prev) => ({ ...hydratedVotes, ...prev }))
       }
     } catch (err) {
       console.error('Failed to fetch articles:', err)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const fetchRadarStats = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/articles/bandit/stats`)
+      if (res.ok) {
+        const data = await res.json()
+        setRadarStats(data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch LinUCB radar stats:', err)
     }
   }
 
@@ -209,6 +240,7 @@ export default function App() {
           context_min_score: data.context_min_score ?? prev.context_min_score,
           context_max_precedents: data.context_max_precedents ?? prev.context_max_precedents,
           articles_per_feed: data.articles_per_feed ?? prev.articles_per_feed,
+          bandit_alpha: data.bandit_alpha ?? prev.bandit_alpha,
           tts_voice: data.tts_voice || prev.tts_voice,
         }))
       }
@@ -232,6 +264,8 @@ export default function App() {
       setAiSettings((prev) => ({ ...prev, ...saved }))
       setSettingsStatus('✓ Saved')
       setTimeout(() => setSettingsStatus(''), 2500)
+      fetchArticles(sortMode)
+      fetchRadarStats()
     } catch (err) {
       console.error('Failed to save AI settings:', err)
       setSettingsStatus('Failed to save')
@@ -273,7 +307,8 @@ export default function App() {
   }
 
   useEffect(() => {
-    fetchArticles()
+    fetchArticles('personalized')
+    fetchRadarStats()
     fetchSettings()
   }, [])
 
@@ -628,12 +663,34 @@ export default function App() {
     )
   }
 
-  // 9. Personalization feedback (thumbs up / down)
-  const handleFeedback = (articleId, vote) => {
+  // 9. Personalization feedback (persisted LinUCB thumbs up / down)
+  const handleFeedback = async (articleId, vote) => {
+    const nextVote = feedback[articleId] === vote ? null : vote
     setFeedback((prev) => ({
       ...prev,
-      [articleId]: prev[articleId] === vote ? null : vote,
+      [articleId]: nextVote,
     }))
+    try {
+      const res = await fetch(`${API_BASE}/api/articles/${articleId}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vote: nextVote }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.radar) {
+          setRadarStats(data.radar)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to persist LinUCB feedback:', err)
+    }
+  }
+
+  const handleSortChange = (nextMode) => {
+    if (nextMode === sortMode) return
+    setSortMode(nextMode)
+    fetchArticles(nextMode)
   }
 
   // Format seconds to "M:SS"
@@ -1060,63 +1117,68 @@ export default function App() {
                     </div>
 
                     <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                      Local LinUCB bandits adapt topic weighting based on thumbs-up feedback:
+                      Local LinUCB bandit learns topic weights from Like (+1.0) &amp; Less (-0.5) signals:
                     </p>
 
-                    <div className="space-y-4 pt-1">
-                      <div className="space-y-1.5">
-                        <div className="flex justify-between text-xs">
-                          <span className="font-medium" style={{ color: 'var(--text-body)' }}>
-                            Systems &amp; Security
-                          </span>
-                          <span style={{ color: 'var(--accent-primary)' }}>Active</span>
-                        </div>
-                        <div
-                          className="w-full h-1.5 rounded-full overflow-hidden"
-                          style={{ backgroundColor: 'var(--bg-subtle)' }}
-                        >
-                          <div
-                            className="h-full w-11/12 rounded-full"
-                            style={{ backgroundColor: 'var(--accent-primary)' }}
-                          ></div>
-                        </div>
-                      </div>
+                    <div className="space-y-3.5 pt-1">
+                      {(radarStats?.topics || [
+                        { label: 'AI & Local LLMs', affinity_pct: 50 },
+                        { label: 'Cybersecurity & Systems', affinity_pct: 50 },
+                        { label: 'Semiconductors & Hardware', affinity_pct: 50 },
+                        { label: 'Startups & Tech Markets', affinity_pct: 50 },
+                        { label: 'Science & Space', affinity_pct: 50 },
+                      ]).map((topic, idx) => {
+                        const barColors = [
+                          'var(--accent-primary)',
+                          'var(--accent-secondary)',
+                          'var(--accent-ochre)',
+                        ]
+                        const barColor = barColors[idx % barColors.length]
+                        return (
+                          <div key={topic.label} className="space-y-1.5">
+                            <div className="flex justify-between text-xs gap-2">
+                              <span
+                                className="font-medium truncate"
+                                style={{ color: 'var(--text-body)' }}
+                              >
+                                {topic.label}
+                              </span>
+                              <span className="font-mono font-semibold shrink-0" style={{ color: barColor }}>
+                                {topic.affinity_pct}%
+                              </span>
+                            </div>
+                            <div
+                              className="w-full h-1.5 rounded-full overflow-hidden"
+                              style={{ backgroundColor: 'var(--bg-subtle)' }}
+                            >
+                              <div
+                                className="h-full rounded-full transition-all duration-300"
+                                style={{
+                                  width: `${topic.affinity_pct}%`,
+                                  backgroundColor: barColor,
+                                }}
+                              ></div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
 
-                      <div className="space-y-1.5">
-                        <div className="flex justify-between text-xs">
-                          <span className="font-medium" style={{ color: 'var(--text-body)' }}>
-                            Space &amp; Interstellar
-                          </span>
-                          <span style={{ color: 'var(--accent-secondary)' }}>88%</span>
-                        </div>
-                        <div
-                          className="w-full h-1.5 rounded-full overflow-hidden"
-                          style={{ backgroundColor: 'var(--bg-subtle)' }}
-                        >
-                          <div
-                            className="h-full w-4/5 rounded-full"
-                            style={{ backgroundColor: 'var(--accent-secondary)' }}
-                          ></div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <div className="flex justify-between text-xs">
-                          <span className="font-medium" style={{ color: 'var(--text-body)' }}>
-                            Local LLM Inference
-                          </span>
-                          <span style={{ color: 'var(--accent-ochre)' }}>95%</span>
-                        </div>
-                        <div
-                          className="w-full h-1.5 rounded-full overflow-hidden"
-                          style={{ backgroundColor: 'var(--bg-subtle)' }}
-                        >
-                          <div
-                            className="h-full w-full rounded-full"
-                            style={{ backgroundColor: 'var(--accent-ochre)' }}
-                          ></div>
-                        </div>
-                      </div>
+                    <div
+                      className="pt-3 border-t flex items-center justify-between text-[11px]"
+                      style={{
+                        borderColor: 'var(--border-hairline)',
+                        color: 'var(--text-muted)',
+                      }}
+                    >
+                      <span>
+                        {radarStats
+                          ? `${radarStats.total_likes} likes • ${radarStats.total_dislikes} dislikes`
+                          : '0 likes • 0 dislikes'}
+                      </span>
+                      <span className="font-mono">
+                        α = {radarStats ? Number(radarStats.alpha).toFixed(2) : Number(aiSettings.bandit_alpha).toFixed(2)}
+                      </span>
                     </div>
                   </div>
 
@@ -1153,19 +1215,57 @@ export default function App() {
                 className="space-y-8 pt-6 border-t"
                 style={{ borderColor: 'var(--border-strong)' }}
               >
-                <div className="flex items-baseline justify-between">
-                  <h3
-                    className="font-editorial text-2xl font-bold"
-                    style={{ color: 'var(--text-main)' }}
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-baseline gap-3">
+                    <h3
+                      className="font-editorial text-2xl font-bold"
+                      style={{ color: 'var(--text-main)' }}
+                    >
+                      Further Dispatches
+                    </h3>
+                    <span
+                      className="text-xs uppercase tracking-widest"
+                      style={{ color: 'var(--text-muted)' }}
+                    >
+                      {furtherDispatches.length} Stories
+                    </span>
+                  </div>
+
+                  {/* Sort Switcher: LinUCB Personalized vs Latest */}
+                  <div
+                    className="inline-flex rounded-full p-0.5 border text-xs font-semibold"
+                    style={{
+                      borderColor: 'var(--border-strong)',
+                      backgroundColor: 'var(--bg-surface)',
+                    }}
                   >
-                    Further Dispatches
-                  </h3>
-                  <span
-                    className="text-xs uppercase tracking-widest"
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    {furtherDispatches.length} Stories Ingested
-                  </span>
+                    <button
+                      onClick={() => handleSortChange('personalized')}
+                      className="px-3.5 py-1.5 rounded-full cursor-pointer transition"
+                      style={{
+                        backgroundColor:
+                          sortMode === 'personalized' ? 'var(--accent-primary)' : 'transparent',
+                        color:
+                          sortMode === 'personalized'
+                            ? 'var(--accent-primary-fg)'
+                            : 'var(--text-body)',
+                      }}
+                    >
+                      ✦ For You (LinUCB)
+                    </button>
+                    <button
+                      onClick={() => handleSortChange('latest')}
+                      className="px-3.5 py-1.5 rounded-full cursor-pointer transition"
+                      style={{
+                        backgroundColor:
+                          sortMode === 'latest' ? 'var(--accent-primary)' : 'transparent',
+                        color:
+                          sortMode === 'latest' ? 'var(--accent-primary-fg)' : 'var(--text-body)',
+                      }}
+                    >
+                      🕒 Latest
+                    </button>
+                  </div>
                 </div>
 
                 {(() => {
@@ -1308,6 +1408,16 @@ export default function App() {
                               title="Tune personalization bandit: recommend more stories like this"
                             >
                               {feedback[article.id] === 'up' ? '✓ Relevant' : 'More like this'}
+                            </button>
+                            <span>•</span>
+                            <button
+                              onClick={() => handleFeedback(article.id, 'down')}
+                              className={`cursor-pointer hover:underline ${
+                                feedback[article.id] === 'down' ? 'font-bold text-rose-600' : ''
+                              }`}
+                              title="Downweight similar topics in LinUCB bandit"
+                            >
+                              {feedback[article.id] === 'down' ? '✕ Less' : 'Less'}
                             </button>
                             <span>•</span>
                             <a

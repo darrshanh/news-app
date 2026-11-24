@@ -32,6 +32,7 @@ class AppSettings(BaseModel):
     context_min_score: float = Field(default=0.42, ge=0.20, le=0.75)
     context_max_precedents: int = Field(default=4, ge=1, le=6)
     articles_per_feed: int = Field(default=5, ge=1, le=10)
+    bandit_alpha: float = Field(default=0.40, ge=0.0, le=1.5)
     tts_voice: str = Field(default="af_sarah")
 
     @field_validator("tts_voice")

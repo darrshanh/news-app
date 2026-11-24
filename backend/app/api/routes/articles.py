@@ -1,30 +1,48 @@
 from fastapi import APIRouter, HTTPException, Response
+from pydantic import BaseModel
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 from backend.app.core.database import (
     get_article_by_id,
-    get_articles,
+    get_articles_with_embeddings,
     save_article_context,
 )
 from backend.app.core.settings_store import get_runtime_settings
+from backend.app.services.bandit import get_bandit_ranker
 from backend.app.services.context_agent import build_historical_context
 from backend.app.services.ingestion import sync_feed, sync_all_feeds, iter_sync_all_feeds
 from backend.app.services.tts import get_tts
-from typing import Optional
+from typing import Literal, Optional
 import json
 from fastapi.responses import StreamingResponse
 
 router = APIRouter(prefix="/articles", tags=["articles"])
 
+
+class FeedbackRequest(BaseModel):
+    vote: Optional[Literal["up", "down"]] = None
+
+
 @router.get("")
-def list_articles(limit: int = 20, since_id: Optional[int] = None):
-    """Retrieve the latest articles from the database"""
-    articles = get_articles(limit=limit, since_id=since_id)
+def list_articles(
+    limit: int = 20,
+    since_id: Optional[int] = None,
+    sort: str = "personalized",
+):
+    """Retrieve articles, optionally ranked by the local LinUCB preference bandit."""
+    articles = get_articles_with_embeddings(limit=limit, since_id=since_id)
     if not articles and since_id is None:
         sync_all_feeds()
-        articles = get_articles(limit=limit)
-    return articles
+        articles = get_articles_with_embeddings(limit=limit)
+    use_personalization = sort == "personalized" and since_id is None
+    return get_bandit_ranker().rank_articles(articles, personalized=use_personalization)
+
+
+@router.get("/bandit/stats")
+def get_bandit_stats():
+    """Return current LinUCB topic affinities and Like/Dislike totals."""
+    return get_bandit_ranker().get_radar_stats()
 
 @router.post("/sync")
 def trigger_sync():
@@ -51,6 +69,16 @@ def stream_sync():
             "X-Accel-Buffering": "no",
         },
     )
+
+@router.post("/{article_id}/feedback")
+def submit_article_feedback(article_id: int, payload: FeedbackRequest):
+    """Record Like/Dislike feedback, update LinUCB matrices, and return refreshed radar."""
+    article = get_article_by_id(article_id=article_id)
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+    radar = get_bandit_ranker().record_feedback(article_id=article_id, vote=payload.vote)
+    return {"article_id": article_id, "vote": payload.vote, "radar": radar}
+
 
 @router.get("/{article_id}/context")
 def get_article_context(article_id: int, refresh: bool = False):

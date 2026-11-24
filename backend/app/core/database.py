@@ -53,6 +53,13 @@ def init_db():
         "key TEXT PRIMARY KEY,"
         "value TEXT NOT NULL);"
     )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS article_feedback("
+        "article_id INTEGER PRIMARY KEY,"
+        "vote TEXT NOT NULL,"
+        "reward REAL NOT NULL,"
+        "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);"
+    )
 
     conn.commit()
     conn.close()
@@ -214,6 +221,66 @@ def save_setting_raw(key: str, value: str) -> None:
     )
     conn.commit()
     conn.close()
+
+
+def upsert_article_feedback(
+    article_id: int, vote: Optional[str], reward: float = 0.0
+) -> None:
+    """Persist or clear user preference feedback ('up', 'down', or None to undo)."""
+    conn = get_db_connection()
+    if vote is None:
+        conn.execute("DELETE FROM article_feedback WHERE article_id = ?", (article_id,))
+    else:
+        conn.execute(
+            "INSERT INTO article_feedback (article_id, vote, reward, updated_at) "
+            "VALUES (?, ?, ?, CURRENT_TIMESTAMP) "
+            "ON CONFLICT(article_id) DO UPDATE SET "
+            "vote = excluded.vote, reward = excluded.reward, updated_at = CURRENT_TIMESTAMP",
+            (article_id, vote, float(reward)),
+        )
+    conn.commit()
+    conn.close()
+
+
+def get_all_feedback_map() -> dict[int, str]:
+    """Return mapping of article_id -> 'up' or 'down' across all saved feedback."""
+    conn = get_db_connection()
+    rows = conn.execute("SELECT article_id, vote FROM article_feedback").fetchall()
+    conn.close()
+    return {int(row["article_id"]): row["vote"] for row in rows}
+
+
+def get_feedback_with_embeddings() -> list[dict]:
+    """Return feedback joined with article metadata and optional embedding BLOB."""
+    conn = get_db_connection()
+    rows = conn.execute(
+        "SELECT f.article_id, f.vote, f.reward, a.title, a.summary, a.content, a.embedding "
+        "FROM article_feedback f "
+        "JOIN articles a ON a.id = f.article_id "
+        "ORDER BY f.article_id ASC"
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def get_articles_with_embeddings(
+    limit: int = 50, since_id: Optional[int] = None
+) -> list[dict]:
+    """Fetch public article columns plus internal embedding BLOB for LinUCB ranking."""
+    conn = get_db_connection()
+    cols = f"{ARTICLE_PUBLIC_COLUMNS}, embedding"
+    if since_id is not None:
+        rows = conn.execute(
+            f"SELECT {cols} FROM articles WHERE id > ? ORDER BY id DESC LIMIT ?",
+            (since_id, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            f"SELECT {cols} FROM articles ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
 
 
 def article_exists(url: str) -> bool:
