@@ -5,7 +5,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 from backend.app.services.scraper import fetch_feed_entries, extract_article_content
 from backend.app.services.tts import KokoroTTS
 from backend.app.models.article import ArticleCreate
-from backend.app.core.database import save_article, article_exists, get_article_by_id
+from backend.app.core.database import (
+    article_exists,
+    get_article_by_id,
+    get_enabled_feed_urls,
+    list_rss_feeds,
+    save_article,
+)
 from backend.app.core.settings_store import get_runtime_settings
 from backend.app.services.embeddings import get_embedding_service
 from backend.app.services.synthesizer import get_synthesizer, EditorialDigest
@@ -93,8 +99,18 @@ def iter_sync_feed(feed_url: str, limit_per_feed: int = 5) -> int:
 def sync_feed(feed_url: str, limit_per_feed: int = 5) -> int:
     return sum(1 for _ in iter_sync_feed(feed_url=feed_url, limit_per_feed=limit_per_feed))
 
+def _resolve_active_feeds(feed_urls: list[str] = None) -> list[str]:
+    """Resolve explicit feed list, enabled DB feeds, or built-in defaults if uninitialized."""
+    if feed_urls is not None:
+        return feed_urls
+    configured = list_rss_feeds()
+    if configured:
+        return get_enabled_feed_urls()
+    return DEFAULT_FEEDS
+
+
 def iter_sync_all_feeds(feed_urls: list[str] = None):
-    feeds = feed_urls or DEFAULT_FEEDS
+    feeds = _resolve_active_feeds(feed_urls)
     limit = get_runtime_settings().articles_per_feed
     with _sync_lock:
         for url in feeds:
@@ -103,7 +119,7 @@ def iter_sync_all_feeds(feed_urls: list[str] = None):
 def sync_all_feeds(feed_urls: list[str] = None) -> dict:
     """Ingest all configured feeds and return summary stats."""
     # Loops over feeds, aggregates counts, and returns e.g. {"new_articles": 7}
-    feeds = feed_urls or DEFAULT_FEEDS
+    feeds = _resolve_active_feeds(feed_urls)
     limit = get_runtime_settings().articles_per_feed
     newly_synced_feed_count = 0
     with _sync_lock:

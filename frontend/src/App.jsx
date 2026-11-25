@@ -171,6 +171,11 @@ export default function App() {
   const [feedback, setFeedback] = useState({})
   const [sortMode, setSortMode] = useState('personalized')
   const [radarStats, setRadarStats] = useState(null)
+  const [feeds, setFeeds] = useState([])
+  const [newFeedUrl, setNewFeedUrl] = useState('')
+  const [newFeedName, setNewFeedName] = useState('')
+  const [feedError, setFeedError] = useState('')
+  const [isAddingFeed, setIsAddingFeed] = useState(false)
 
   // Audio Playback State
   const [currentTrack, setCurrentTrack] = useState(null)
@@ -306,10 +311,81 @@ export default function App() {
     }
   }
 
+  const fetchFeeds = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/feeds`)
+      if (res.ok) {
+        const data = await res.json()
+        setFeeds(Array.isArray(data) ? data : [])
+      }
+    } catch (err) {
+      console.error('Failed to fetch RSS feeds:', err)
+    }
+  }
+
+  const handleAddFeed = async (e) => {
+    e.preventDefault()
+    const trimmedUrl = newFeedUrl.trim()
+    if (!trimmedUrl) {
+      setFeedError('Please enter an RSS or Atom feed URL.')
+      return
+    }
+    setFeedError('')
+    setIsAddingFeed(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/feeds`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: trimmedUrl, name: newFeedName.trim() }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.detail || `HTTP ${res.status}`)
+      }
+      setFeeds((prev) => [...prev, data])
+      setNewFeedUrl('')
+      setNewFeedName('')
+    } catch (err) {
+      setFeedError(err.message || 'Could not add RSS feed.')
+    } finally {
+      setIsAddingFeed(false)
+    }
+  }
+
+  const handleToggleFeed = async (feedId, nextEnabled) => {
+    setFeedError('')
+    try {
+      const res = await fetch(`${API_BASE}/api/feeds/${feedId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: nextEnabled }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const updated = await res.json()
+      setFeeds((prev) => prev.map((f) => (f.id === feedId ? updated : f)))
+    } catch (err) {
+      console.error('Failed to toggle RSS feed:', err)
+      setFeedError('Could not update feed status.')
+    }
+  }
+
+  const handleDeleteFeed = async (feedId) => {
+    setFeedError('')
+    try {
+      const res = await fetch(`${API_BASE}/api/feeds/${feedId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setFeeds((prev) => prev.filter((f) => f.id !== feedId))
+    } catch (err) {
+      console.error('Failed to delete RSS feed:', err)
+      setFeedError('Could not remove feed.')
+    }
+  }
+
   useEffect(() => {
     fetchArticles('personalized')
     fetchRadarStats()
     fetchSettings()
+    fetchFeeds()
   }, [])
 
   // Measure rendered collapsed card heights after feed load/refresh to balance 2-column masonry
@@ -1820,6 +1896,126 @@ export default function App() {
                   {isSavingSettings ? 'Saving...' : 'Save AI Settings'}
                 </button>
               </div>
+            </section>
+
+            {/* Section 3: Custom RSS Feed Sources */}
+            <section
+              className="space-y-4 pt-5 border-t"
+              style={{ borderColor: 'var(--border-hairline)' }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <h3
+                  className="text-xs font-bold uppercase tracking-widest"
+                  style={{ color: 'var(--accent-secondary)' }}
+                >
+                  RSS Feed Sources
+                </h3>
+                <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                  {feeds.filter((f) => f.enabled).length} / {feeds.length} active
+                </span>
+              </div>
+
+              <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
+                {feeds.length === 0 ? (
+                  <p className="text-xs italic" style={{ color: 'var(--text-muted)' }}>
+                    No feeds loaded yet. Connect backend or add a custom RSS feed below.
+                  </p>
+                ) : (
+                  feeds.map((feed) => (
+                    <div
+                      key={feed.id}
+                      className="flex items-center justify-between gap-2.5 p-2.5 rounded-xl border"
+                      style={{
+                        backgroundColor: 'var(--bg-page)',
+                        borderColor: 'var(--border-hairline)',
+                        opacity: feed.enabled ? 1 : 0.6,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleToggleFeed(feed.id, !feed.enabled)}
+                        className="px-2.5 py-1 rounded-full text-[11px] font-bold shrink-0 cursor-pointer transition"
+                        style={{
+                          backgroundColor: feed.enabled
+                            ? 'var(--accent-primary)'
+                            : 'var(--tag-bg)',
+                          color: feed.enabled
+                            ? 'var(--accent-primary-fg)'
+                            : 'var(--text-muted)',
+                        }}
+                        title={feed.enabled ? 'Pause this feed' : 'Enable this feed'}
+                      >
+                        {feed.enabled ? 'On' : 'Paused'}
+                      </button>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-semibold truncate">{feed.name}</div>
+                        <div
+                          className="text-[11px] truncate"
+                          style={{ color: 'var(--text-muted)' }}
+                          title={feed.url}
+                        >
+                          {feed.url}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteFeed(feed.id)}
+                        className="w-6 h-6 rounded-full text-xs cursor-pointer hover:opacity-75 shrink-0"
+                        style={{ color: 'var(--text-muted)' }}
+                        title="Remove RSS feed"
+                        aria-label={`Remove ${feed.name}`}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <form onSubmit={handleAddFeed} className="space-y-2 pt-1">
+                <input
+                  type="url"
+                  value={newFeedUrl}
+                  onChange={(e) => setNewFeedUrl(e.target.value)}
+                  placeholder="https://example.com/rss.xml"
+                  className="w-full px-3 py-2 rounded-lg border text-xs"
+                  style={{
+                    backgroundColor: 'var(--bg-page)',
+                    borderColor: 'var(--border-strong)',
+                    color: 'var(--text-main)',
+                  }}
+                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newFeedName}
+                    onChange={(e) => setNewFeedName(e.target.value)}
+                    placeholder="Display name (optional)"
+                    className="flex-1 px-3 py-2 rounded-lg border text-xs"
+                    style={{
+                      backgroundColor: 'var(--bg-page)',
+                      borderColor: 'var(--border-strong)',
+                      color: 'var(--text-main)',
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={isAddingFeed}
+                    className="px-4 py-2 rounded-lg text-xs font-bold cursor-pointer hover:opacity-90 disabled:opacity-50 shrink-0"
+                    style={{
+                      backgroundColor: 'var(--accent-secondary)',
+                      color: '#FFFFFF',
+                    }}
+                  >
+                    {isAddingFeed ? 'Adding...' : '+ Add'}
+                  </button>
+                </div>
+                {feedError && (
+                  <p className="text-[11px] font-medium text-rose-500">{feedError}</p>
+                )}
+              </form>
             </section>
           </aside>
         </div>

@@ -10,6 +10,12 @@ ARTICLE_PUBLIC_COLUMNS = (
     "takeaways, audio_script, historical_context, created_at"
 )
 
+DEFAULT_SEED_FEEDS = (
+    ("Hacker News", "https://news.ycombinator.com/rss"),
+    ("Ars Technica", "https://feeds.arstechnica.com/arstechnica/technology-lab"),
+    ("TechCrunch", "https://techcrunch.com/feed/"),
+)
+
 
 def get_db_connection():
     data_dir = Path(__file__).resolve().parent.parent.parent.parent / "data"
@@ -60,6 +66,21 @@ def init_db():
         "reward REAL NOT NULL,"
         "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);"
     )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS rss_feeds("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "name TEXT NOT NULL,"
+        "url TEXT UNIQUE NOT NULL,"
+        "enabled INTEGER NOT NULL DEFAULT 1,"
+        "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);"
+    )
+
+    feed_count = conn.execute("SELECT COUNT(*) FROM rss_feeds").fetchone()[0]
+    if feed_count == 0:
+        conn.executemany(
+            "INSERT OR IGNORE INTO rss_feeds (name, url, enabled) VALUES (?, ?, 1)",
+            DEFAULT_SEED_FEEDS,
+        )
 
     conn.commit()
     conn.close()
@@ -281,6 +302,77 @@ def get_articles_with_embeddings(
         ).fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+
+def _normalize_feed_row(row) -> dict:
+    item = dict(row)
+    item["enabled"] = bool(item.get("enabled", 1))
+    return item
+
+
+def list_rss_feeds() -> list[dict]:
+    """Return all configured RSS feeds ordered by creation ID."""
+    conn = get_db_connection()
+    rows = conn.execute(
+        "SELECT id, name, url, enabled, created_at FROM rss_feeds ORDER BY id ASC"
+    ).fetchall()
+    conn.close()
+    return [_normalize_feed_row(row) for row in rows]
+
+
+def get_enabled_feed_urls() -> list[str]:
+    """Return URLs of all enabled RSS feeds."""
+    conn = get_db_connection()
+    rows = conn.execute(
+        "SELECT url FROM rss_feeds WHERE enabled = 1 ORDER BY id ASC"
+    ).fetchall()
+    conn.close()
+    return [row["url"] for row in rows]
+
+
+def add_rss_feed(url: str, name: str) -> dict:
+    """Insert a new RSS feed row and return the normalized record."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.execute(
+            "INSERT INTO rss_feeds (name, url, enabled) VALUES (?, ?, 1)",
+            (name, url),
+        )
+        conn.commit()
+        feed_id = cursor.lastrowid
+        row = conn.execute(
+            "SELECT id, name, url, enabled, created_at FROM rss_feeds WHERE id = ?",
+            (feed_id,),
+        ).fetchone()
+        return _normalize_feed_row(row)
+    finally:
+        conn.close()
+
+
+def toggle_rss_feed(feed_id: int, enabled: bool) -> Optional[dict]:
+    """Enable or disable a configured RSS feed by ID."""
+    conn = get_db_connection()
+    conn.execute(
+        "UPDATE rss_feeds SET enabled = ? WHERE id = ?",
+        (1 if enabled else 0, feed_id),
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT id, name, url, enabled, created_at FROM rss_feeds WHERE id = ?",
+        (feed_id,),
+    ).fetchone()
+    conn.close()
+    return _normalize_feed_row(row) if row else None
+
+
+def delete_rss_feed(feed_id: int) -> bool:
+    """Delete a configured RSS feed by ID; returns True if a row was removed."""
+    conn = get_db_connection()
+    cursor = conn.execute("DELETE FROM rss_feeds WHERE id = ?", (feed_id,))
+    conn.commit()
+    deleted = cursor.rowcount > 0
+    conn.close()
+    return deleted
 
 
 def article_exists(url: str) -> bool:

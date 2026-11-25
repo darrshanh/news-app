@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.core.database import init_db
-from backend.app.api.routes import articles, settings
+from backend.app.api.routes import articles, feeds, settings
 import asyncio
 import logging
 
@@ -67,6 +67,7 @@ app.add_middleware(
 
 # Register our routes
 app.include_router(articles.router, prefix="/api")
+app.include_router(feeds.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
 
 @app.get("/api/health")
